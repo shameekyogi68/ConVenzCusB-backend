@@ -12,7 +12,7 @@ const otpStore = new Map(); // { phone: { otp, timestamp } }
 ------------------------------------------------------------ */
 export const registerUser = async (req, res) => {
   try {
-    const { phone } = req.body;
+    const { phone, fcmToken } = req.body;
     
     if (!phone) {
       console.log(`❌ OTP_REGISTER_FAILED | ${new Date().toISOString()} | Reason: Phone required`);
@@ -32,19 +32,29 @@ export const registerUser = async (req, res) => {
     let isNewUser = false;
 
     if (!user) {
-      user = await User.create({ phone });
+      user = await User.create({ phone, fcmToken });
       isNewUser = true;
+    } else {
+      // Update FCM token if provided for existing user
+      if (fcmToken && fcmToken !== user.fcmToken) {
+        user.fcmToken = fcmToken;
+        await user.save();
+      }
     }
 
     console.log(`✅ OTP_GENERATED | ${new Date().toISOString()} | Phone: ${phone} | User: ${user.user_id} | OTP: ${otp} | Status: ${isNewUser ? 'NEW' : 'EXISTING'}`);
     
-    // Send push notification with OTP if user has FCM token
-    if (user.fcmToken) {
+    // Send push notification with OTP - MANDATORY
+    const tokenToUse = fcmToken || user.fcmToken;
+    if (tokenToUse) {
       try {
-        await sendOtpNotification(user.fcmToken, otp, user.user_id);
+        await sendOtpNotification(tokenToUse, otp, user.user_id);
       } catch (error) {
-        // Error already logged in sendOtpNotification, continue without breaking
+        console.error(`⚠️  OTP_PUSH_FAILED_BUT_CONTINUING | ${new Date().toISOString()} | User: ${user.user_id}`);
+        // Continue even if notification fails - user still gets OTP in response
       }
+    } else {
+      console.log(`⚠️  NO_FCM_TOKEN | ${new Date().toISOString()} | User: ${user.user_id} | Phone: ${phone}`);
     }
 
     return res.json({
