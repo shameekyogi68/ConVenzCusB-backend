@@ -260,9 +260,10 @@ export const updateUserProfile = async (req, res) => {
 export const updateVendorLocation = async (req, res) => {
   try {
     console.log('\n📍 === UPDATE VENDOR LOCATION ===');
-    const { userId, latitude, longitude } = req.body;
+    const { userId, latitude, longitude, address: providedAddress } = req.body;
     console.log('👤 User ID:', userId);
     console.log('🌍 Coordinates:', { latitude, longitude });
+    console.log('📍 Address from app:', providedAddress || 'Not provided');
 
     const user = await User.findOne({ user_id: userId });
     if (!user) {
@@ -270,18 +271,25 @@ export const updateVendorLocation = async (req, res) => {
       return res.json({ success: false, message: "User not found" });
     }
 
-    let address = "Address not found";
-    try {
-      const apiKey = process.env.OPENCAGE_API_KEY;
-      const geoUrl = `https://api.opencagedata.com/geocode/v1/json?q=${latitude},${longitude}&key=${apiKey}`;
-      console.log('🔍 Fetching address from coordinates...');
-      const response = await axios.get(geoUrl);
-      if (response.data.results.length > 0) {
-        address = response.data.results[0].formatted;
-        console.log('📍 Address found:', address);
+    // Use address from Flutter app if provided, otherwise geocode
+    let address = providedAddress || "Address not found";
+    
+    if (!providedAddress) {
+      console.log('⚠️ No address from app, falling back to geocoding...');
+      try {
+        const apiKey = process.env.OPENCAGE_API_KEY;
+        const geoUrl = `https://api.opencagedata.com/geocode/v1/json?q=${latitude},${longitude}&key=${apiKey}`;
+        console.log('🔍 Fetching address from coordinates...');
+        const response = await axios.get(geoUrl);
+        if (response.data.results.length > 0) {
+          address = response.data.results[0].formatted;
+          console.log('📍 Geocoded address:', address);
+        }
+      } catch (err) {
+        console.error("⚠️ Geocoding failed:", err.message);
       }
-    } catch (err) {
-      console.error("⚠️ Geocoding failed:", err.message);
+    } else {
+      console.log('✅ Using cleaned address from Flutter app');
     }
 
     user.location = { type: "Point", coordinates: [longitude, latitude] };
