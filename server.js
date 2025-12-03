@@ -71,7 +71,8 @@ app.use((err, req, res, next) => {
 
 // Start Server
 const PORT = process.env.PORT || 5005;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 API Base URL: http://localhost:${PORT}`);
+const HOST = '0.0.0.0'; // Required for Render deployment
+
+app.listen(PORT, HOST, () => {
+  console.log(`✅ SERVER_STARTED | ${new Date().toISOString()} | Port: ${PORT} | Host: ${HOST} | Env: ${process.env.NODE_ENV}`);
 });
