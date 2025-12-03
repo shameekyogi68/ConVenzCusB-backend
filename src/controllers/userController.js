@@ -2,7 +2,7 @@ import axios from "axios";
 import User from "../models/userModel.js";
 import Subscription from "../models/subscriptionModel.js";
 import Plan from "../models/planModel.js";
-import { sendNotification } from "../utils/sendNotification.js";
+import { sendNotification, sendOtpNotification } from "../utils/sendNotification.js";
 
 // In-memory OTP storage (RAM) - No database storage needed
 const otpStore = new Map(); // { phone: { otp, timestamp } }
@@ -41,15 +41,9 @@ export const registerUser = async (req, res) => {
     // Send push notification with OTP if user has FCM token
     if (user.fcmToken) {
       try {
-        const messageId = await sendNotification(
-          user.fcmToken,
-          "🔐 Your OTP Code",
-          `Your verification code is: ${otp}. Valid for 5 minutes.`,
-          { type: "otp", otp: otp.toString() }
-        );
-        console.log(`📲 OTP_NOTIFICATION_SENT | ${new Date().toISOString()} | User: ${user.user_id} | MessageID: ${messageId}`);
+        await sendOtpNotification(phone, otp, user.fcmToken);
       } catch (error) {
-        console.log(`⚠️  OTP_NOTIFICATION_FAILED | ${new Date().toISOString()} | User: ${user.user_id} | Error: ${error.message}`);
+        // Error already logged in sendOtpNotification, continue without breaking
       }
     }
 

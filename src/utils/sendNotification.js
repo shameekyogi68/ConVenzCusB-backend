@@ -190,6 +190,73 @@ export const sendTopicNotification = async (topic, title, body, data = {}) => {
 };
 
 /**
+ * Send OTP notification to user
+ * @param {string} phone - User's phone number
+ * @param {number} otp - The OTP code
+ * @param {string} fcmToken - User's FCM token
+ * @returns {Promise<string>} - Message ID on success
+ */
+export const sendOtpNotification = async (phone, otp, fcmToken) => {
+  if (!fcmToken) {
+    console.log(`⚠️  OTP_NOTIFICATION_SKIPPED | ${new Date().toISOString()} | Phone: ${phone} | Reason: No FCM token`);
+    return null;
+  }
+
+  try {
+    const message = {
+      token: fcmToken,
+      notification: {
+        title: "🔐 Your OTP Code",
+        body: `Your verification OTP is: ${otp}`,
+      },
+      data: {
+        type: "otp",
+        otp: String(otp),
+        clickAction: "FLUTTER_NOTIFICATION_CLICK",
+      },
+      android: {
+        priority: "high",
+        notification: {
+          sound: "default",
+          channelId: "default",
+          priority: "high",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 1,
+            alert: {
+              title: "🔐 Your OTP Code",
+              body: `Your verification OTP is: ${otp}`,
+            },
+          },
+        },
+      },
+    };
+    
+    const response = await admin.messaging().send(message);
+    console.log(`✅ OTP_NOTIFICATION_SENT | ${new Date().toISOString()} | Phone: ${phone} | MessageID: ${response}`);
+    return response;
+  } catch (error) {
+    console.error(`❌ OTP_NOTIFICATION_FAILED | ${new Date().toISOString()} | Phone: ${phone} | Error: ${error.message}`);
+    
+    // Handle specific FCM errors
+    if (error.code === 'messaging/registration-token-not-registered' || 
+        error.code === 'messaging/invalid-registration-token') {
+      console.error("🚫 Token invalid/expired");
+      throw new Error(`Invalid or expired FCM token: ${error.message}`);
+    } else if (error.message.includes('Requested entity was not found')) {
+      console.error("🚫 FCM project mismatch or deleted app instance");
+      throw new Error(`FCM entity not found: ${error.message}`);
+    }
+    
+    throw error;
+  }
+};
+
+/**
  * Validate if an FCM token is valid by sending a test message (dry run)
  * @param {string} token - FCM device token to validate
  * @returns {Promise<boolean>} - True if valid, false if invalid
