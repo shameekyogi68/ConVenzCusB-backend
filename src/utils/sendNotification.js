@@ -196,9 +196,9 @@ export const sendTopicNotification = async (topic, title, body, data = {}) => {
  * @param {string} fcmToken - User's FCM token
  * @returns {Promise<string>} - Message ID on success
  */
-export const sendOtpNotification = async (phone, otp, fcmToken) => {
+export const sendOtpNotification = async (fcmToken, otp, userId = null) => {
   if (!fcmToken) {
-    console.log(`⚠️  OTP_NOTIFICATION_SKIPPED | ${new Date().toISOString()} | Phone: ${phone} | Reason: No FCM token`);
+    console.log(`⚠️  OTP_NOTIFICATION_SKIPPED | ${new Date().toISOString()} | Reason: No FCM token`);
     return null;
   }
 
@@ -206,8 +206,8 @@ export const sendOtpNotification = async (phone, otp, fcmToken) => {
     const message = {
       token: fcmToken,
       notification: {
-        title: "🔐 Your OTP Code",
-        body: `Your verification OTP is: ${otp}`,
+        title: "🔐 Your Login OTP",
+        body: `Your OTP is ${otp}`,
       },
       data: {
         type: "otp",
@@ -218,8 +218,7 @@ export const sendOtpNotification = async (phone, otp, fcmToken) => {
         priority: "high",
         notification: {
           sound: "default",
-          channelId: "default",
-          priority: "high",
+          channelId: "otp_channel",
         },
       },
       apns: {
@@ -228,8 +227,8 @@ export const sendOtpNotification = async (phone, otp, fcmToken) => {
             sound: "default",
             badge: 1,
             alert: {
-              title: "🔐 Your OTP Code",
-              body: `Your verification OTP is: ${otp}`,
+              title: "🔐 Your Login OTP",
+              body: `Your OTP is ${otp}`,
             },
           },
         },
@@ -237,10 +236,10 @@ export const sendOtpNotification = async (phone, otp, fcmToken) => {
     };
     
     const response = await admin.messaging().send(message);
-    console.log(`✅ OTP_NOTIFICATION_SENT | ${new Date().toISOString()} | Phone: ${phone} | MessageID: ${response}`);
+    console.log(`📲 OTP_PUSH_SENT | ${new Date().toISOString()} | User: ${userId || 'N/A'} | OTP: ${otp}`);
     return response;
   } catch (error) {
-    console.error(`❌ OTP_NOTIFICATION_FAILED | ${new Date().toISOString()} | Phone: ${phone} | Error: ${error.message}`);
+    console.error(`❌ OTP_PUSH_FAILED | ${new Date().toISOString()} | User: ${userId || 'N/A'} | Error: ${error.message}`);
     
     // Handle specific FCM errors
     if (error.code === 'messaging/registration-token-not-registered' || 

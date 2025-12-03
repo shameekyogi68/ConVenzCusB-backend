@@ -41,7 +41,7 @@ export const registerUser = async (req, res) => {
     // Send push notification with OTP if user has FCM token
     if (user.fcmToken) {
       try {
-        await sendOtpNotification(phone, otp, user.fcmToken);
+        await sendOtpNotification(user.fcmToken, otp, user.user_id);
       } catch (error) {
         // Error already logged in sendOtpNotification, continue without breaking
       }
