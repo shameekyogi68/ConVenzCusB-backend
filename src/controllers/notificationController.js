@@ -6,26 +6,20 @@ import { sendNotification, sendMultipleNotifications, sendTopicNotification } fr
 ------------------------------------------------------------ */
 export const updateFcmToken = async (req, res) => {
   try {
-    console.log('\n🔔 === UPDATE FCM TOKEN ===');
-    console.log('⏰ Timestamp:', new Date().toISOString());
     const { userId, fcmToken } = req.body;
 
     if (!userId || !fcmToken) {
-      console.log('❌ Missing userId or fcmToken');
+      console.log(`❌ TOKEN_UPDATE_FAILED | ${new Date().toISOString()} | Reason: Missing userId or token`);
       return res.status(400).json({ 
         success: false, 
         message: "userId and fcmToken are required" 
       });
     }
 
-    console.log('👤 User ID:', userId);
-    console.log('🔑 FCM Token (full):', fcmToken);
-    console.log('📏 Token length:', fcmToken.length, 'characters');
-
     const user = await User.findOne({ user_id: userId });
 
     if (!user) {
-      console.log('❌ User not found for userId:', userId);
+      console.log(`❌ TOKEN_UPDATE_FAILED | ${new Date().toISOString()} | User: ${userId} | Reason: User not found`);
       return res.status(404).json({ 
         success: false, 
         message: "User not found" 
@@ -35,35 +29,23 @@ export const updateFcmToken = async (req, res) => {
     // Check if token is already used by another user (prevent duplicates)
     const existingUser = await User.findOne({ fcmToken: fcmToken, user_id: { $ne: userId } });
     if (existingUser) {
-      console.log('⚠️  Token already exists for another user:', existingUser.user_id);
-      console.log('🔄 Removing token from previous user');
+      console.log(`🔄 TOKEN_MOVED | ${new Date().toISOString()} | From: ${existingUser.user_id} | To: ${userId}`);
       existingUser.fcmToken = null;
       await existingUser.save();
     }
 
-    const oldToken = user.fcmToken;
+    const isNew = !user.fcmToken;
     user.fcmToken = fcmToken;
     await user.save();
 
-    console.log('✅ FCM token updated successfully for user:', user.user_id);
-    console.log('📱 Phone:', user.phone);
-    console.log('👤 Name:', user.name || 'Not set');
-    if (oldToken && oldToken !== fcmToken) {
-      console.log('🔄 Token changed from:', oldToken.substring(0, 20) + '...');
-    } else if (!oldToken) {
-      console.log('🆕 First time token registration');
-    } else {
-      console.log('🔄 Token refreshed (same token)');
-    }
-    console.log('='.repeat(50));
+    console.log(`✅ TOKEN_UPDATED | ${new Date().toISOString()} | User: ${user.user_id} | Phone: ${user.phone} | Status: ${isNew ? 'NEW' : 'REFRESH'}`);
 
     return res.json({ 
       success: true, 
       message: "FCM token updated successfully" 
     });
   } catch (err) {
-    console.error('❌ Update FCM Token Error:', err.message);
-    console.error('⚠️  Stack:', err.stack);
+    console.error(`❌ TOKEN_UPDATE_ERROR | ${new Date().toISOString()} | Error: ${err.message}`);
     return res.status(500).json({ 
       success: false, 
       message: err.message 
@@ -87,15 +69,11 @@ export const sendNotificationToUser = async (req, res) => {
       });
     }
 
-    console.log('👤 Target User ID:', userId);
-    console.log('📨 Title:', title);
-    console.log('📝 Body:', body);
-
     // Get user's FCM token
     const user = await User.findOne({ user_id: userId });
 
     if (!user) {
-      console.log('❌ User not found');
+      console.log(`❌ SEND_NOTIFICATION_FAILED | ${new Date().toISOString()} | User ${userId} not found`);
       return res.status(404).json({ 
         success: false, 
         message: "User not found" 
@@ -103,22 +81,17 @@ export const sendNotificationToUser = async (req, res) => {
     }
 
     if (!user.fcmToken) {
-      console.log('❌ User has no FCM token');
+      console.log(`❌ NO_FCM_TOKEN | ${new Date().toISOString()} | User: ${userId}`);
       return res.status(400).json({ 
         success: false, 
         message: "User has no FCM token registered" 
       });
     }
 
-    console.log('🔑 Sending to FCM token:', user.fcmToken.substring(0, 20) + '...');
-
     // Send notification using utility function
     try {
       const response = await sendNotification(user.fcmToken, title, body, data || {});
-      
-      console.log('✅ Notification sent successfully');
-      console.log('📬 Message ID:', response);
-      console.log('='.repeat(50));
+      console.log(`✅ MANUAL_NOTIFICATION_SENT | ${new Date().toISOString()} | User: ${userId} | MessageID: ${response}`);
 
       return res.json({ 
         success: true, 
@@ -129,7 +102,7 @@ export const sendNotificationToUser = async (req, res) => {
       // If token is invalid/expired, remove it from database
       if (notificationError.message.includes('Invalid or expired FCM token') ||
           notificationError.message.includes('FCM entity not found')) {
-        console.log('🗑️  Removing invalid FCM token from database');
+        console.log(`🗑️  TOKEN_REMOVED | ${new Date().toISOString()} | User: ${userId} | Reason: Invalid/Expired`);
         user.fcmToken = null;
         await user.save();
         
@@ -142,7 +115,7 @@ export const sendNotificationToUser = async (req, res) => {
       throw notificationError;
     }
   } catch (err) {
-    console.error('❌ Send Notification Error:', err.message);
+    console.error(`❌ SEND_NOTIFICATION_ERROR | ${new Date().toISOString()} | User: ${userId} | Error: ${err.message}`);
     return res.status(500).json({ 
       success: false, 
       message: err.message 

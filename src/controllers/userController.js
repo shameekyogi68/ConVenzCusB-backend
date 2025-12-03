@@ -12,30 +12,21 @@ const otpStore = new Map(); // { phone: { otp, timestamp } }
 ------------------------------------------------------------ */
 export const registerUser = async (req, res) => {
   try {
-    console.log('\n🔐 === OTP REGISTRATION PROCESS ===');
-    console.log('⏰ Timestamp:', new Date().toISOString());
     const { phone } = req.body;
     
     if (!phone) {
-      console.log('❌ Registration failed: Phone number required');
+      console.log(`❌ OTP_REGISTER_FAILED | ${new Date().toISOString()} | Reason: Phone required`);
       return res.json({ success: false, message: "Phone number required" });
     }
 
-    console.log('📱 Phone number received:', phone);
-
     // Generate random 4-digit OTP
     const otp = Math.floor(1000 + Math.random() * 9000);
-    const otpTimestamp = new Date().toISOString();
-    console.log('🔑 Generated OTP:', otp);
-    console.log('⏰ OTP Generation Time:', otpTimestamp);
-    console.log('⚠️  IMPORTANT: Enter this OTP in the app:', otp);
     
     // Store OTP in memory (RAM) with timestamp
     otpStore.set(phone, {
       otp: otp,
       timestamp: Date.now()
     });
-    console.log('💾 OTP stored in memory (RAM) for phone:', phone);
     
     let user = await User.findOne({ phone });
     let isNewUser = false;
@@ -43,35 +34,24 @@ export const registerUser = async (req, res) => {
     if (!user) {
       user = await User.create({ phone });
       isNewUser = true;
-      console.log("🆕 New user created:", phone);
-      console.log("👤 User ID:", user.user_id);
-      console.log("📊 User Status: NEW USER");
-    } else {
-      console.log('🔄 Existing user found:', user.user_id);
-      console.log("👤 User Name:", user.name || 'Not set');
-      console.log("📊 User Status: EXISTING USER");
-      console.log("📱 Has FCM Token:", user.fcmToken ? 'YES' : 'NO');
     }
 
-    console.log('✅ OTP sent successfully to phone:', phone);
-    console.log('⏰ OTP valid for 5 minutes (expires at:', new Date(Date.now() + 300000).toISOString() + ')');
+    console.log(`✅ OTP_GENERATED | ${new Date().toISOString()} | Phone: ${phone} | User: ${user.user_id} | OTP: ${otp} | Status: ${isNewUser ? 'NEW' : 'EXISTING'}`);
     
     // Send push notification with OTP if user has FCM token
     if (user.fcmToken) {
       try {
-        await sendNotification(
+        const messageId = await sendNotification(
           user.fcmToken,
           "🔐 Your OTP Code",
           `Your verification code is: ${otp}. Valid for 5 minutes.`,
           { type: "otp", otp: otp.toString() }
         );
-        console.log('📲 OTP notification sent via FCM');
+        console.log(`📲 OTP_NOTIFICATION_SENT | ${new Date().toISOString()} | User: ${user.user_id} | MessageID: ${messageId}`);
       } catch (error) {
-        console.log('⚠️  FCM notification failed (user will still see OTP):', error.message);
+        console.log(`⚠️  OTP_NOTIFICATION_FAILED | ${new Date().toISOString()} | User: ${user.user_id} | Error: ${error.message}`);
       }
     }
-    
-    console.log('='.repeat(50));
 
     return res.json({
       success: true,
@@ -81,7 +61,7 @@ export const registerUser = async (req, res) => {
       isNewUser: !user.name && !user.gender,
     });
   } catch (err) {
-    console.error('❌ Registration Error:', err.message);
+    console.error(`❌ OTP_REGISTER_ERROR | ${new Date().toISOString()} | Error: ${err.message}`);
     return res.json({ success: false, message: err.message });
   }
 };
@@ -91,96 +71,71 @@ export const registerUser = async (req, res) => {
 ------------------------------------------------------------ */
 export const verifyOtp = async (req, res) => {
   try {
-    console.log('\n🔍 === OTP VERIFICATION PROCESS ===');
-    console.log('⏰ Timestamp:', new Date().toISOString());
     const { phone, otp } = req.body;
-    console.log('📱 Verifying OTP for phone:', phone);
-    console.log('🔑 OTP received from user:', otp);
-    console.log('📏 OTP length:', String(otp).length, 'characters');
     
     // Check if OTP exists in memory
     const otpData = otpStore.get(phone);
     
     if (!otpData) {
-      console.log('❌ Verification failed: No OTP found for this phone');
-      console.log('💡 Possible reasons: OTP expired, never requested, or already used');
+      console.log(`❌ OTP_NOT_FOUND | ${new Date().toISOString()} | Phone: ${phone}`);
       return res.json({ success: false, message: "OTP not found or expired" });
     }
 
-    console.log('🔑 Stored OTP in memory:', otpData.otp);
-    console.log('🔑 User entered OTP:', Number(otp));
-    console.log('⏰ OTP was generated at:', new Date(otpData.timestamp).toISOString());
-
     // Check OTP expiry (5 minutes = 300000 ms)
     const otpAge = Date.now() - otpData.timestamp;
-    const otpAgeSeconds = Math.floor(otpAge / 1000);
-    console.log('⏱️  OTP age:', otpAgeSeconds, 'seconds');
     
     if (otpAge > 300000) {
-      console.log('❌ OTP expired (older than 5 minutes)');
-      console.log('⏰ OTP expired at:', new Date(otpData.timestamp + 300000).toISOString());
-      otpStore.delete(phone); // Clean up expired OTP
+      console.log(`❌ OTP_EXPIRED | ${new Date().toISOString()} | Phone: ${phone} | Age: ${Math.floor(otpAge / 1000)}s`);
+      otpStore.delete(phone);
       return res.json({ success: false, message: "OTP expired" });
     }
 
     // Compare OTPs
     const enteredOtp = Number(otp);
     const storedOtp = otpData.otp;
-    console.log('🔍 OTP Comparison:');
-    console.log('   Expected (stored):', storedOtp, '(type:', typeof storedOtp + ')');
-    console.log('   Received (user):', enteredOtp, '(type:', typeof enteredOtp + ')');
-    console.log('   Match:', enteredOtp === storedOtp ? '✅ YES' : '❌ NO');
     
     if (enteredOtp !== storedOtp) {
-      console.log('❌ OTP verification failed: OTP does not match');
+      console.log(`❌ OTP_MISMATCH | ${new Date().toISOString()} | Phone: ${phone} | Expected: ${storedOtp} | Got: ${enteredOtp}`);
       return res.json({ success: false, message: "Invalid OTP" });
     }
 
     // OTP is valid - remove it from memory
     otpStore.delete(phone);
-    console.log('🗑️  OTP removed from memory after successful verification');
 
     const user = await User.findOne({ phone });
 
     if (!user) {
-      console.log('❌ Verification failed: User not found for phone:', phone);
+      console.log(`❌ USER_NOT_FOUND | ${new Date().toISOString()} | Phone: ${phone}`);
       return res.json({ success: false, message: "User not found" });
     }
 
-    console.log('✅ OTP verified successfully!');
-    console.log('👤 User ID:', user.user_id);
-    console.log('📱 Phone:', phone);
-    console.log('👤 Name:', user.name || 'Not set');
-    console.log('📊 Profile Complete:', (user.name && user.gender) ? 'YES' : 'NO');
-    console.log('🎉 User authenticated successfully');
+    console.log(`✅ OTP_VERIFIED | ${new Date().toISOString()} | Phone: ${phone} | User: ${user.user_id} | ProfileComplete: ${(user.name && user.gender) ? 'YES' : 'NO'}`);
     
     // Send welcome notification after successful OTP verification
     if (user.fcmToken) {
       try {
         const isNewUser = !user.name && !user.gender;
         if (isNewUser) {
-          await sendNotification(
+          const messageId = await sendNotification(
             user.fcmToken,
             "✅ Verification Successful!",
             "Welcome! Please complete your profile to get started.",
             { type: "welcome", screen: "setup" }
           );
-          console.log('📲 Welcome notification sent via FCM');
+          console.log(`📲 WELCOME_SENT | ${new Date().toISOString()} | User: ${user.user_id} | MessageID: ${messageId}`);
         } else {
-          await sendNotification(
+          const messageId = await sendNotification(
             user.fcmToken,
             "🎉 Welcome Back!",
             `Hello ${user.name}, you're successfully logged in.`,
             { type: "login", screen: "home" }
           );
-          console.log('📲 Welcome back notification sent via FCM');
+          console.log(`📲 WELCOME_BACK_SENT | ${new Date().toISOString()} | User: ${user.user_id} | MessageID: ${messageId}`);
         }
       } catch (error) {
-        console.log('⚠️  FCM notification failed:', error.message);
+        console.log(`⚠️  WELCOME_NOTIFICATION_FAILED | ${new Date().toISOString()} | User: ${user.user_id} | Error: ${error.message}`);
       }
     }
-    
-    console.log('='.repeat(50));
 
     return res.json({
       success: true,
@@ -190,7 +145,7 @@ export const verifyOtp = async (req, res) => {
       isNewUser: !user.name && !user.gender,
     });
   } catch (err) {
-    console.error('❌ OTP Verification Error:', err.message);
+    console.error(`❌ OTP_VERIFY_ERROR | ${new Date().toISOString()} | Error: ${err.message}`);
     return res.json({ success: false, message: err.message });
   }
 };
@@ -200,16 +155,12 @@ export const verifyOtp = async (req, res) => {
 ------------------------------------------------------------ */
 export const updateUserDetails = async (req, res) => {
   try {
-    console.log('\n✏️  === UPDATE USER DETAILS ===');
     const { phone, name, gender } = req.body;
-    console.log('📱 Phone:', phone);
-    console.log('👤 Name:', name);
-    console.log('⚥ Gender:', gender);
     
     const user = await User.findOne({ phone });
 
     if (!user) {
-      console.log('❌ Update failed: User not found');
+      console.log(`❌ UPDATE_DETAILS_FAILED | ${new Date().toISOString()} | Phone: ${phone} | Reason: User not found`);
       return res.json({ success: false, message: "User not found" });
     }
 
@@ -217,28 +168,26 @@ export const updateUserDetails = async (req, res) => {
     user.gender = gender || user.gender;
     await user.save();
 
-    console.log('✅ User details updated successfully for:', user.user_id);
+    console.log(`✅ DETAILS_UPDATED | ${new Date().toISOString()} | User: ${user.user_id} | Name: ${name}`);
     
     // Send profile completion notification
     if (user.fcmToken) {
       try {
-        await sendNotification(
+        const messageId = await sendNotification(
           user.fcmToken,
           "✅ Profile Updated!",
           `Great job ${name}! Your profile has been successfully updated.`,
           { type: "profile_update", screen: "home" }
         );
-        console.log('📲 Profile update notification sent via FCM');
+        console.log(`📲 PROFILE_UPDATE_SENT | ${new Date().toISOString()} | User: ${user.user_id} | MessageID: ${messageId}`);
       } catch (error) {
-        console.log('⚠️  FCM notification failed:', error.message);
+        console.log(`⚠️  PROFILE_UPDATE_FAILED | ${new Date().toISOString()} | User: ${user.user_id} | Error: ${error.message}`);
       }
     }
-    
-    console.log('='.repeat(50));
 
     return res.json({ success: true, message: "Details updated", user });
   } catch (err) {
-    console.error('❌ Update Details Error:', err.message);
+    console.error(`❌ UPDATE_DETAILS_ERROR | ${new Date().toISOString()} | Error: ${err.message}`);
     return res.json({ success: false, message: err.message });
   }
 };
@@ -344,15 +293,15 @@ export const updateVendorLocation = async (req, res) => {
     // Send location confirmation notification
     if (user.fcmToken) {
       try {
-        await sendNotification(
+        const messageId = await sendNotification(
           user.fcmToken,
           "📍 Location Updated",
           `Your location has been set to: ${address}`,
           { type: "location_update", address }
         );
-        console.log('📲 Location update notification sent via FCM');
+        console.log(`📲 LOCATION_UPDATE_SENT | ${new Date().toISOString()} | User: ${user.user_id} | MessageID: ${messageId}`);
       } catch (error) {
-        console.log('⚠️  FCM notification failed:', error.message);
+        console.log(`⚠️  LOCATION_UPDATE_FAILED | ${new Date().toISOString()} | User: ${user.user_id} | Error: ${error.message}`);
       }
     }
     
