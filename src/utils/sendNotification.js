@@ -10,12 +10,19 @@ import admin from "../config/firebase.js";
  */
 export const sendNotification = async (token, title, body, data = {}) => {
   try {
+    console.log('\n📤 === SENDING FCM NOTIFICATION ===');
+    console.log('⏰ Timestamp:', new Date().toISOString());
+    console.log('🔑 Target FCM Token:', token);
+    console.log('📨 Title:', title);
+    console.log('📝 Body:', body);
+    
     // Convert all data values to strings as FCM requires
     const stringData = {};
     if (data && Object.keys(data).length > 0) {
       Object.keys(data).forEach(key => {
         stringData[key] = String(data[key]);
       });
+      console.log('📦 Additional Data:', JSON.stringify(stringData, null, 2));
     }
     stringData.clickAction = stringData.clickAction || "FLUTTER_NOTIFICATION_CLICK";
 
@@ -43,20 +50,32 @@ export const sendNotification = async (token, title, body, data = {}) => {
       },
     };
 
+    console.log('📬 Complete FCM Payload:', JSON.stringify(message, null, 2));
+    console.log('🚀 Sending to Firebase Cloud Messaging...');
+    
     const response = await admin.messaging().send(message);
-    console.log("🔥 Notification sent successfully:", response);
+    
+    console.log("✅ FCM notification sent successfully!");
+    console.log("📬 Message ID:", response);
+    console.log('='.repeat(50));
+    
     return response;
   } catch (error) {
-    console.error("❌ Failed to send notification:", error.message);
-    console.error("⚠️  Error code:", error.code);
+    console.error("\n❌ === FCM SEND FAILED ===");
+    console.error("⏰ Timestamp:", new Date().toISOString());
+    console.error("❌ Error Message:", error.message);
+    console.error("⚠️  Error Code:", error.code);
+    console.error("🔑 Token (first 30 chars):", token ? token.substring(0, 30) + '...' : 'NULL');
     
     // Handle specific FCM errors
     if (error.code === 'messaging/registration-token-not-registered' || 
         error.code === 'messaging/invalid-registration-token') {
       console.error("🚫 Token is invalid or expired. The app may need to re-register for FCM.");
+      console.error('='.repeat(50));
       throw new Error(`Invalid or expired FCM token: ${error.message}`);
     } else if (error.code === 'messaging/invalid-argument') {
       console.error("🚫 Invalid message payload. Check that all data values are strings.");
+      console.error('='.repeat(50));
       throw new Error(`Invalid FCM message format: ${error.message}`);
     } else if (error.message.includes('Requested entity was not found')) {
       console.error("🚫 FCM project mismatch or token from deleted app instance.");
@@ -64,9 +83,12 @@ export const sendNotification = async (token, title, body, data = {}) => {
       console.error("   1. Verify firebase-service-account.json matches your app's Firebase project");
       console.error("   2. Check if the app instance was deleted and needs to re-register");
       console.error("   3. Ensure the FCM token is from the correct Firebase project");
+      console.error('='.repeat(50));
       throw new Error(`FCM entity not found: Token may be from wrong project or deleted app instance`);
     }
     
+    console.error("📋 Full Error:", error);
+    console.error('='.repeat(50));
     throw error;
   }
 };

@@ -7,6 +7,7 @@ import { sendNotification, sendMultipleNotifications, sendTopicNotification } fr
 export const updateFcmToken = async (req, res) => {
   try {
     console.log('\n🔔 === UPDATE FCM TOKEN ===');
+    console.log('⏰ Timestamp:', new Date().toISOString());
     const { userId, fcmToken } = req.body;
 
     if (!userId || !fcmToken) {
@@ -18,22 +19,42 @@ export const updateFcmToken = async (req, res) => {
     }
 
     console.log('👤 User ID:', userId);
-    console.log('🔑 FCM Token:', fcmToken.substring(0, 20) + '...');
+    console.log('🔑 FCM Token (full):', fcmToken);
+    console.log('📏 Token length:', fcmToken.length, 'characters');
 
     const user = await User.findOne({ user_id: userId });
 
     if (!user) {
-      console.log('❌ User not found');
+      console.log('❌ User not found for userId:', userId);
       return res.status(404).json({ 
         success: false, 
         message: "User not found" 
       });
     }
 
+    // Check if token is already used by another user (prevent duplicates)
+    const existingUser = await User.findOne({ fcmToken: fcmToken, user_id: { $ne: userId } });
+    if (existingUser) {
+      console.log('⚠️  Token already exists for another user:', existingUser.user_id);
+      console.log('🔄 Removing token from previous user');
+      existingUser.fcmToken = null;
+      await existingUser.save();
+    }
+
+    const oldToken = user.fcmToken;
     user.fcmToken = fcmToken;
     await user.save();
 
     console.log('✅ FCM token updated successfully for user:', user.user_id);
+    console.log('📱 Phone:', user.phone);
+    console.log('👤 Name:', user.name || 'Not set');
+    if (oldToken && oldToken !== fcmToken) {
+      console.log('🔄 Token changed from:', oldToken.substring(0, 20) + '...');
+    } else if (!oldToken) {
+      console.log('🆕 First time token registration');
+    } else {
+      console.log('🔄 Token refreshed (same token)');
+    }
     console.log('='.repeat(50));
 
     return res.json({ 
@@ -42,6 +63,7 @@ export const updateFcmToken = async (req, res) => {
     });
   } catch (err) {
     console.error('❌ Update FCM Token Error:', err.message);
+    console.error('⚠️  Stack:', err.stack);
     return res.status(500).json({ 
       success: false, 
       message: err.message 

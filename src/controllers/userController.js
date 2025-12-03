@@ -13,6 +13,7 @@ const otpStore = new Map(); // { phone: { otp, timestamp } }
 export const registerUser = async (req, res) => {
   try {
     console.log('\n🔐 === OTP REGISTRATION PROCESS ===');
+    console.log('⏰ Timestamp:', new Date().toISOString());
     const { phone } = req.body;
     
     if (!phone) {
@@ -24,7 +25,9 @@ export const registerUser = async (req, res) => {
 
     // Generate random 4-digit OTP
     const otp = Math.floor(1000 + Math.random() * 9000);
+    const otpTimestamp = new Date().toISOString();
     console.log('🔑 Generated OTP:', otp);
+    console.log('⏰ OTP Generation Time:', otpTimestamp);
     console.log('⚠️  IMPORTANT: Enter this OTP in the app:', otp);
     
     // Store OTP in memory (RAM) with timestamp
@@ -35,16 +38,23 @@ export const registerUser = async (req, res) => {
     console.log('💾 OTP stored in memory (RAM) for phone:', phone);
     
     let user = await User.findOne({ phone });
+    let isNewUser = false;
 
     if (!user) {
       user = await User.create({ phone });
+      isNewUser = true;
       console.log("🆕 New user created:", phone);
+      console.log("👤 User ID:", user.user_id);
+      console.log("📊 User Status: NEW USER");
     } else {
       console.log('🔄 Existing user found:', user.user_id);
+      console.log("👤 User Name:", user.name || 'Not set');
+      console.log("📊 User Status: EXISTING USER");
+      console.log("📱 Has FCM Token:", user.fcmToken ? 'YES' : 'NO');
     }
 
     console.log('✅ OTP sent successfully to phone:', phone);
-    console.log('⏰ OTP valid for 5 minutes');
+    console.log('⏰ OTP valid for 5 minutes (expires at:', new Date(Date.now() + 300000).toISOString() + ')');
     
     // Send push notification with OTP if user has FCM token
     if (user.fcmToken) {
@@ -82,34 +92,47 @@ export const registerUser = async (req, res) => {
 export const verifyOtp = async (req, res) => {
   try {
     console.log('\n🔍 === OTP VERIFICATION PROCESS ===');
+    console.log('⏰ Timestamp:', new Date().toISOString());
     const { phone, otp } = req.body;
     console.log('📱 Verifying OTP for phone:', phone);
     console.log('🔑 OTP received from user:', otp);
+    console.log('📏 OTP length:', String(otp).length, 'characters');
     
     // Check if OTP exists in memory
     const otpData = otpStore.get(phone);
     
     if (!otpData) {
       console.log('❌ Verification failed: No OTP found for this phone');
+      console.log('💡 Possible reasons: OTP expired, never requested, or already used');
       return res.json({ success: false, message: "OTP not found or expired" });
     }
 
     console.log('🔑 Stored OTP in memory:', otpData.otp);
     console.log('🔑 User entered OTP:', Number(otp));
+    console.log('⏰ OTP was generated at:', new Date(otpData.timestamp).toISOString());
 
     // Check OTP expiry (5 minutes = 300000 ms)
     const otpAge = Date.now() - otpData.timestamp;
+    const otpAgeSeconds = Math.floor(otpAge / 1000);
+    console.log('⏱️  OTP age:', otpAgeSeconds, 'seconds');
+    
     if (otpAge > 300000) {
       console.log('❌ OTP expired (older than 5 minutes)');
+      console.log('⏰ OTP expired at:', new Date(otpData.timestamp + 300000).toISOString());
       otpStore.delete(phone); // Clean up expired OTP
       return res.json({ success: false, message: "OTP expired" });
     }
 
     // Compare OTPs
-    if (Number(otp) !== otpData.otp) {
+    const enteredOtp = Number(otp);
+    const storedOtp = otpData.otp;
+    console.log('🔍 OTP Comparison:');
+    console.log('   Expected (stored):', storedOtp, '(type:', typeof storedOtp + ')');
+    console.log('   Received (user):', enteredOtp, '(type:', typeof enteredOtp + ')');
+    console.log('   Match:', enteredOtp === storedOtp ? '✅ YES' : '❌ NO');
+    
+    if (enteredOtp !== storedOtp) {
       console.log('❌ OTP verification failed: OTP does not match');
-      console.log('   Expected:', otpData.otp);
-      console.log('   Received:', Number(otp));
       return res.json({ success: false, message: "Invalid OTP" });
     }
 
@@ -124,8 +147,12 @@ export const verifyOtp = async (req, res) => {
       return res.json({ success: false, message: "User not found" });
     }
 
-    console.log('✅ OTP verified successfully for user:', user.user_id);
-    console.log('🎉 User authenticated:', phone);
+    console.log('✅ OTP verified successfully!');
+    console.log('👤 User ID:', user.user_id);
+    console.log('📱 Phone:', phone);
+    console.log('👤 Name:', user.name || 'Not set');
+    console.log('📊 Profile Complete:', (user.name && user.gender) ? 'YES' : 'NO');
+    console.log('🎉 User authenticated successfully');
     
     // Send welcome notification after successful OTP verification
     if (user.fcmToken) {
