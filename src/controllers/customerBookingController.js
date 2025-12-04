@@ -121,76 +121,112 @@ export const createCustomerBooking = async (req, res) => {
     console.log(`✅ VENDOR_MATCHED | Vendor: ${vendorMatch.vendor.name} (ID: ${vendorMatch.vendor.vendor_id}) | Distance: ${vendorMatch.distance}km`);
 
     // ✅ Step 6: Send POST request to vendor backend (SERVER-TO-SERVER)
-    const vendorBackendUrl = process.env.VENDOR_BACKEND_URL;
+    const vendorBackendUrl = process.env.VENDOR_BACKEND_URL || 'https://vendor-backend-7cn3.onrender.com';
     
-    if (!vendorBackendUrl) {
-      console.log('⚠️  VENDOR_BACKEND_URL not configured in environment');
-    } else {
+    let vendorBackendNotified = false;
+    
+    try {
+      console.log(`\n📤 Sending request to vendor backend: ${vendorBackendUrl}/vendor/api/new-booking`);
+      
+      const vendorNotificationPayload = {
+        bookingId: newBooking.booking_id,
+        vendorId: vendorMatch.vendor.vendor_id,
+        customerId: userId,
+        customerName: customer.name || "Customer",
+        customerPhone: String(customer.phone),
+        service: selectedService,
+        jobDescription,
+        date,
+        time,
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          address: location.address
+        },
+        distance: vendorMatch.distance,
+        createdAt: new Date().toISOString()
+      };
+
+      console.log('📦 Vendor Backend Payload:', JSON.stringify(vendorNotificationPayload, null, 2));
+
+      const vendorBackendResponse = await axios.post(
+        `${vendorBackendUrl}/vendor/api/new-booking`,
+        vendorNotificationPayload,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Source': 'customer-backend'
+          },
+          timeout: 15000 // 15 second timeout
+        }
+      );
+
+      console.log(`✅ VENDOR_BACKEND_NOTIFIED | Status: ${vendorBackendResponse.status} | Response:`, vendorBackendResponse.data);
+      vendorBackendNotified = true;
+      
+    } catch (vendorError) {
+      console.error(`❌ VENDOR_BACKEND_NOTIFICATION_FAILED | Error: ${vendorError.message}`);
+      
+      if (vendorError.response) {
+        console.error(`   Response Status: ${vendorError.response.status}`);
+        console.error(`   Response Data:`, JSON.stringify(vendorError.response.data, null, 2));
+      } else if (vendorError.request) {
+        console.error(`   No response received from vendor backend`);
+      } else {
+        console.error(`   Request setup error:`, vendorError.message);
+      }
+      
+      // Continue with FCM notification as fallback
+    }
+
+    // ✅ Step 7: Send FCM notification to vendor (PRIMARY notification method)
+    let vendorFcmSent = false;
+    
+    if (vendorMatch.vendor.fcmTokens && vendorMatch.vendor.fcmTokens.length > 0) {
       try {
-        console.log(`\n📤 Sending request to vendor backend: ${vendorBackendUrl}/vendor/api/new-booking`);
-        
-        const vendorNotificationPayload = {
-          bookingId: newBooking.booking_id,
-          vendorId: vendorMatch.vendor.vendor_id,
-          customerId: userId,
+        const notificationData = {
+          type: "NEW_BOOKING",
+          bookingId: String(newBooking.booking_id),
+          vendorId: String(vendorMatch.vendor.vendor_id),
+          customerId: String(userId),
           customerName: customer.name || "Customer",
-          customerPhone: customer.phone,
+          customerPhone: String(customer.phone),
           service: selectedService,
           jobDescription,
           date,
           time,
-          location: {
-            latitude: location.latitude,
-            longitude: location.longitude,
-            address: location.address
-          },
-          distance: vendorMatch.distance,
-          createdAt: new Date().toISOString()
+          address: location.address,
+          latitude: String(location.latitude),
+          longitude: String(location.longitude),
+          distance: String(vendorMatch.distance)
         };
 
-        const vendorBackendResponse = await axios.post(
-          `${vendorBackendUrl}/vendor/api/new-booking`,
-          vendorNotificationPayload,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-API-Source': 'customer-backend'
-            },
-            timeout: 10000 // 10 second timeout
-          }
-        );
-
-        console.log(`✅ VENDOR_BACKEND_NOTIFIED | Status: ${vendorBackendResponse.status} | Response:`, vendorBackendResponse.data);
+        console.log(`\n📲 Sending FCM to vendor...`);
+        console.log(`   Vendor ID: ${vendorMatch.vendor.vendor_id}`);
+        console.log(`   FCM Tokens: ${vendorMatch.vendor.fcmTokens.length}`);
         
-      } catch (vendorError) {
-        console.log(`⚠️  VENDOR_BACKEND_NOTIFICATION_FAILED | Error: ${vendorError.message}`);
-        
-        // Log but don't fail the booking - vendor can still be notified via FCM
-        if (vendorError.response) {
-          console.log(`   Response Status: ${vendorError.response.status}`);
-          console.log(`   Response Data:`, vendorError.response.data);
-        }
-      }
-    }
-
-    // ✅ Step 7: Send FCM notification to vendor (backup notification)
-    if (vendorMatch.vendor.fcmTokens && vendorMatch.vendor.fcmTokens.length > 0) {
-      try {
         await sendNotification(
           vendorMatch.vendor.fcmTokens[0],
           "🔔 New Service Request",
-          `${customer.name || 'A customer'} needs ${selectedService} at ${time} on ${date}`,
-          {
-            type: "NEW_BOOKING",
-            bookingId: String(newBooking.booking_id),
-            vendorId: String(vendorMatch.vendor.vendor_id),
-            service: selectedService
-          }
+          `${customer.name || 'A customer'} needs ${selectedService} at ${time} on ${date}. Distance: ${vendorMatch.distance}km`,
+          notificationData
         );
-        console.log(`📲 VENDOR_FCM_SENT | Vendor: ${vendorMatch.vendor.vendor_id}`);
+        
+        console.log(`✅ VENDOR_FCM_SENT | Vendor: ${vendorMatch.vendor.vendor_id}`);
+        vendorFcmSent = true;
+        
       } catch (error) {
-        console.log(`⚠️  VENDOR_FCM_FAILED | Error: ${error.message}`);
+        console.error(`❌ VENDOR_FCM_FAILED | Error: ${error.message}`);
       }
+    } else {
+      console.warn(`⚠️  NO_VENDOR_FCM_TOKENS | Vendor ${vendorMatch.vendor.vendor_id} has no FCM tokens registered`);
+    }
+
+    // Log notification status
+    if (vendorBackendNotified || vendorFcmSent) {
+      console.log(`\n✅ VENDOR_NOTIFIED | Backend: ${vendorBackendNotified ? 'YES' : 'NO'} | FCM: ${vendorFcmSent ? 'YES' : 'NO'}`);
+    } else {
+      console.warn(`\n⚠️  WARNING: Vendor was NOT notified via any method!`);
     }
 
     // ✅ Step 8: Send confirmation to customer

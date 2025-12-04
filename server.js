@@ -28,10 +28,19 @@ app.use(express.urlencoded({ extended: true }));
 
 // Request Logging Middleware
 app.use((req, res, next) => {
-  console.log(`\n📥 ${req.method} ${req.path}`);
+  const timestamp = new Date().toISOString();
+  console.log(`\n📥 [${timestamp}] ${req.method} ${req.path}`);
+  console.log(`   Origin: ${req.headers.origin || 'unknown'}`);
+  console.log(`   User-Agent: ${req.headers['user-agent'] || 'unknown'}`);
+  
   if (req.body && Object.keys(req.body).length > 0) {
     console.log('📦 Request Body:', JSON.stringify(req.body, null, 2));
   }
+  
+  if (req.query && Object.keys(req.query).length > 0) {
+    console.log('🔍 Query Params:', JSON.stringify(req.query, null, 2));
+  }
+  
   next();
 });
 
@@ -53,9 +62,22 @@ app.get("/", (req, res) => {
 
 // 404 Handler
 app.use((req, res) => {
+  console.error(`\n❌ 404 NOT FOUND`);
+  console.error(`   Method: ${req.method}`);
+  console.error(`   Path: ${req.path}`);
+  console.error(`   Full URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
+  console.error(`   Available routes:`);
+  console.error(`   - POST /api/user/register`);
+  console.error(`   - POST /api/user/verify-otp`);
+  console.error(`   - POST /api/user/booking/create`);
+  console.error(`   - GET  /api/user/bookings/:userId`);
+  
   res.status(404).json({ 
     success: false, 
-    message: "Route not found" 
+    message: "Route not found",
+    requestedPath: req.path,
+    method: req.method,
+    hint: "Check if the endpoint path is correct. Booking creation should be: POST /api/user/booking/create"
   });
 });
 
