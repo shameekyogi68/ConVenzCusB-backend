@@ -31,7 +31,8 @@ app.use(express.urlencoded({ extended: true }));
 // Request Logging Middleware
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
-  console.log(`\n📥 [${timestamp}] ${req.method} ${req.path}`);
+  const logMessage = `\n📥 [${timestamp}] ${req.method} ${req.path}`;
+  console.log(logMessage);
   console.log(`   Origin: ${req.headers.origin || 'unknown'}`);
   console.log(`   User-Agent: ${req.headers['user-agent'] || 'unknown'}`);
   
@@ -42,6 +43,9 @@ app.use((req, res, next) => {
   if (req.query && Object.keys(req.query).length > 0) {
     console.log('🔍 Query Params:', JSON.stringify(req.query, null, 2));
   }
+  
+  // Force console flush for Render
+  if (process.stdout.write) process.stdout.write('');
   
   next();
 });
@@ -112,5 +116,12 @@ const PORT = process.env.PORT || 5005;
 const HOST = '0.0.0.0'; // Required for Render deployment
 
 app.listen(PORT, HOST, () => {
-  console.log(`✅ SERVER_STARTED | ${new Date().toISOString()} | Port: ${PORT} | Host: ${HOST} | Env: ${process.env.NODE_ENV}`);
+  console.log('\n' + '='.repeat(60));
+  console.log('🚀 CONVENZ CUSTOMER BACKEND SERVER');
+  console.log('='.repeat(60));
+  console.log(`✅ SERVER_STARTED | ${new Date().toISOString()}`);
+  console.log(`📍 Port: ${PORT} | Host: ${HOST}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 Base URL: http://${HOST}:${PORT}`);
+  console.log('='.repeat(60) + '\n');
 });

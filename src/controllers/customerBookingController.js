@@ -16,16 +16,37 @@ import { sendNotification } from "../utils/sendNotification.js";
 export const createCustomerBooking = async (req, res) => {
   try {
     console.log('\n📅 === CUSTOMER BOOKING REQUEST ===');
-    console.log('📦 Request Body:', JSON.stringify(req.body, null, 2));
+    console.log('📦 Full Request Body:', JSON.stringify(req.body, null, 2));
+    console.log('📦 Body Keys:', Object.keys(req.body));
     
     const { userId, selectedService, jobDescription, date, time, location } = req.body;
 
+    console.log('🔍 Extracted Fields:');
+    console.log('   userId:', userId);
+    console.log('   selectedService:', selectedService);
+    console.log('   jobDescription:', jobDescription);
+    console.log('   date:', date);
+    console.log('   time:', time);
+    console.log('   location:', JSON.stringify(location));
+
     // ✅ Step 1: Validate required fields
     if (!userId || !selectedService || !jobDescription || !date || !time || !location) {
-      console.log('❌ Missing required fields');
+      const missing = [];
+      if (!userId) missing.push('userId');
+      if (!selectedService) missing.push('selectedService');
+      if (!jobDescription) missing.push('jobDescription');
+      if (!date) missing.push('date');
+      if (!time) missing.push('time');
+      if (!location) missing.push('location');
+      
+      console.log('❌ Missing required fields:', missing.join(', '));
+      console.log('❌ What was received:', { userId, selectedService, jobDescription, date, time, location });
+      
       return res.status(400).json({
         success: false,
-        message: "Missing required fields: userId, selectedService, jobDescription, date, time, location"
+        message: `Missing required fields: ${missing.join(', ')}`,
+        receivedFields: Object.keys(req.body),
+        hint: "Flutter must send: userId, selectedService, jobDescription, date, time, location"
       });
     }
 
