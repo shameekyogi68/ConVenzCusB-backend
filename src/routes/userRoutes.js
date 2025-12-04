@@ -30,11 +30,13 @@ const router = express.Router();
 
 /* ------------------------------------------
    👤 USER ROUTES
+   NOTE: Register and OTP verification do NOT have blocking middleware
+   because blocking is checked AFTER user logs in
 ------------------------------------------- */
-router.post("/register", registerUser);
+router.post("/register", registerUser); // No blocking check - allow registration
 router.post("/user/register", registerUser); // Alias for Flutter app compatibility
-router.post("/verify-otp", verifyOtp);
-router.post("/user/verify-otp", verifyOtp); // Alias for Flutter app compatibility
+router.post("/verify-otp", checkUserBlocked, verifyOtp); // Check block status during login
+router.post("/user/verify-otp", checkUserBlocked, verifyOtp); // Alias for Flutter app compatibility
 router.post("/update-user", checkUserBlocked, updateUserDetails);
 router.post("/update-location", checkUserBlocked, updateVendorLocation);
 router.post("/update-fcm-token", checkUserBlocked, updateFcmToken);
