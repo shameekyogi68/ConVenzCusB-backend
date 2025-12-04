@@ -8,29 +8,32 @@ import User from "../models/userModel.js";
 ------------------------------------------------------------ */
 export const checkUserBlocked = async (req, res, next) => {
   try {
-    // Extract userId from request body or params
+    // Extract userId from request body or params, or phone from body
     const userId = req.body.userId || req.params.userId;
+    const phone = req.body.phone;
     
-    if (!userId) {
-      // If no userId, skip check (for routes that don't require it)
+    if (!userId && !phone) {
+      // If no userId or phone, skip check (for routes that don't require it)
       return next();
     }
 
-    // Find user and check block status
-    const user = await User.findOne({ user_id: userId });
+    // Find user by userId or phone
+    let user;
+    if (userId) {
+      user = await User.findOne({ user_id: userId });
+    } else if (phone) {
+      user = await User.findOne({ phone: phone });
+    }
     
     if (!user) {
-      console.log(`⚠️  User ${userId} not found in block check`);
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-        blocked: false
-      });
+      console.log(`⚠️  User not found in block check | UserID: ${userId} | Phone: ${phone}`);
+      // User not found - allow request to proceed (controller will handle)
+      return next();
     }
 
     // Check if user is blocked
     if (user.isBlocked === true) {
-      console.log(`🚫 BLOCKED USER ATTEMPT | User ID: ${userId} | Name: ${user.name || 'Unknown'} | Phone: ${user.phone}`);
+      console.log(`🚫 BLOCKED USER ATTEMPT | User ID: ${user.user_id} | Name: ${user.name || 'Unknown'} | Phone: ${user.phone}`);
       console.log(`   Block Reason: ${user.blockReason || 'Not specified'}`);
       console.log(`   Blocked At: ${user.blockedAt || 'Unknown'}`);
       
@@ -45,7 +48,7 @@ export const checkUserBlocked = async (req, res, next) => {
     }
 
     // User is not blocked, continue
-    console.log(`✅ User ${userId} is active (not blocked)`);
+    console.log(`✅ User ${user.user_id} (${user.phone}) is active (not blocked)`);
     next();
     
   } catch (error) {
