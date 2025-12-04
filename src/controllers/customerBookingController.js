@@ -351,7 +351,41 @@ export const createCustomerBooking = async (req, res) => {
     console.log('='.repeat(50));
     console.log('✅ BOOKING PROCESS COMPLETED SUCCESSFULLY\n');
 
-    // ✅ Step 9: Return success response
+    // ✅ Step 9: Schedule "Vendor Not Found" notification after 1 minute
+    setTimeout(async () => {
+      try {
+        // Check if booking is still pending (vendor hasn't accepted)
+        const updatedBooking = await Booking.findOne({ booking_id: newBooking.booking_id });
+        
+        if (updatedBooking && updatedBooking.status === 'pending') {
+          console.log(`\n⏰ 1-MINUTE CHECK | Booking ${newBooking.booking_id} still pending`);
+          
+          // Get customer for FCM token
+          const customerForNotif = await User.findOne({ user_id: userId });
+          
+          if (customerForNotif && customerForNotif.fcmToken) {
+            await sendNotification(
+              customerForNotif.fcmToken,
+              "⚠️ Vendor Not Found",
+              `Sorry, no vendor has accepted your ${selectedService} request yet. We're still searching...`,
+              {
+                type: "VENDOR_NOT_FOUND",
+                bookingId: String(newBooking.booking_id),
+                status: "pending",
+                service: selectedService
+              }
+            );
+            console.log(`📲 VENDOR_NOT_FOUND_NOTIFICATION_SENT | Booking: ${newBooking.booking_id}`);
+          }
+        } else {
+          console.log(`✅ Booking ${newBooking.booking_id} already accepted/updated - no notification needed`);
+        }
+      } catch (error) {
+        console.error(`❌ Error in delayed notification: ${error.message}`);
+      }
+    }, 60000); // 60 seconds = 1 minute
+
+    // ✅ Step 10: Return success response
     return res.status(201).json({
       success: true,
       message: "Booking created and vendor notified",
