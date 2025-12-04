@@ -67,17 +67,24 @@ app.use((req, res) => {
   console.error(`   Path: ${req.path}`);
   console.error(`   Full URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
   console.error(`   Available routes:`);
-  console.error(`   - POST /api/user/register`);
-  console.error(`   - POST /api/user/verify-otp`);
+  console.error(`   - POST /api/user/register (or /api/user/user/register)`);
+  console.error(`   - POST /api/user/verify-otp (or /api/user/user/verify-otp)`);
   console.error(`   - POST /api/user/booking/create`);
   console.error(`   - GET  /api/user/bookings/:userId`);
+  console.error(`   - GET  /api/user/booking/:bookingId`);
+  
+  // Check if it's the common double /user/ mistake
+  let hint = "Check if the endpoint path is correct.";
+  if (req.path.includes('/user/user/')) {
+    hint = "✅ FIXED: Both /api/user/register and /api/user/user/register now work!";
+  }
   
   res.status(404).json({ 
     success: false, 
     message: "Route not found",
     requestedPath: req.path,
     method: req.method,
-    hint: "Check if the endpoint path is correct. Booking creation should be: POST /api/user/booking/create"
+    hint: hint
   });
 });
 

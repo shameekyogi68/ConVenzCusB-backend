@@ -32,7 +32,9 @@ const router = express.Router();
    👤 USER ROUTES
 ------------------------------------------- */
 router.post("/register", registerUser);
+router.post("/user/register", registerUser); // Alias for Flutter app compatibility
 router.post("/verify-otp", verifyOtp);
+router.post("/user/verify-otp", verifyOtp); // Alias for Flutter app compatibility
 router.post("/update-user", checkUserBlocked, updateUserDetails);
 router.post("/update-location", checkUserBlocked, updateVendorLocation);
 router.post("/update-fcm-token", checkUserBlocked, updateFcmToken);
@@ -42,14 +44,22 @@ router.post("/profile/:userId", checkUserBlocked, updateUserProfile);
 
 /* ------------------------------------------
    📅 BOOKING ROUTES (Customer Side)
+   NOTE: Specific routes MUST come before parameterized routes
 ------------------------------------------- */
-router.post("/booking/create", checkUserBlocked, createCustomerBooking);
-router.get("/bookings/:userId", checkUserBlocked, getUserBookings);
-router.get("/booking/:bookingId", getBookingDetails);
-router.post("/booking/:bookingId/cancel", checkUserBlocked, cancelBooking);
-
 // Status update from vendor backend (no blocking check - comes from vendor)
 router.post("/booking/status-update", updateBookingStatus);
+
+// Create booking - MUST come before :bookingId route
+router.post("/booking/create", checkUserBlocked, createCustomerBooking);
+
+// Get all user bookings
+router.get("/bookings/:userId", checkUserBlocked, getUserBookings);
+
+// Cancel booking
+router.post("/booking/:bookingId/cancel", checkUserBlocked, cancelBooking);
+
+// Get single booking details - MUST come last (catches any bookingId)
+router.get("/booking/:bookingId", getBookingDetails);
 
 /* ------------------------------------------
    🔒 ADMIN ROUTES - User Blocking
