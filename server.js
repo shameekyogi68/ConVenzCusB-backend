@@ -56,8 +56,15 @@ app.use("/api/notification", notificationRoutes);
 app.get("/", (req, res) => {
   res.json({ 
     success: true, 
-    message: "Convenz API Server is running",
-    version: "1.0.0",
+    message: "Convenz Customer Backend API",
+    version: "2.0.0",
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      auth: "/api/user/register, /api/user/verify-otp",
+      profile: "/api/user/profile/:userId",
+      booking: "/api/user/booking/create",
+      bookings: "/api/user/bookings/:userId"
+    },
     timestamp: new Date().toISOString()
   });
 });
@@ -67,19 +74,19 @@ app.use((req, res) => {
   console.error(`\n❌ 404 NOT FOUND`);
   console.error(`   Method: ${req.method}`);
   console.error(`   Path: ${req.path}`);
+  console.error(`   Original URL: ${req.originalUrl}`);
   console.error(`   Full URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
-  console.error(`   Available routes:`);
-  console.error(`   - POST /api/user/register (or /api/user/user/register)`);
-  console.error(`   - POST /api/user/verify-otp (or /api/user/user/verify-otp)`);
-  console.error(`   - POST /api/user/booking/create`);
-  console.error(`   - GET  /api/user/bookings/:userId`);
-  console.error(`   - GET  /api/user/booking/:bookingId`);
+  console.error(`   Body:`, JSON.stringify(req.body));
+  console.error(`   Params:`, JSON.stringify(req.params));
+  console.error(`   Query:`, JSON.stringify(req.query));
+  console.error(`\n   📋 Available routes:`);
+  console.error(`   Auth: POST /api/user/register, /api/user/verify-otp`);
+  console.error(`   Profile: GET/POST /api/user/profile/:userId`);
+  console.error(`   Booking: POST /api/user/booking/create`);
+  console.error(`   Bookings: GET /api/user/bookings/:userId`);
+  console.error(`   Booking Details: GET /api/user/booking/:bookingId`);
   
-  // Check if it's the common double /user/ mistake
   let hint = "Check if the endpoint path is correct.";
-  if (req.path.includes('/user/user/')) {
-    hint = "✅ FIXED: Both /api/user/register and /api/user/user/register now work!";
-  }
   
   res.status(404).json({ 
     success: false, 

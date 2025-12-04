@@ -44,6 +44,10 @@ router.post("/update-fcm-token", checkUserBlocked, updateFcmToken);
 router.get("/profile/:userId", checkUserBlocked, getUserProfile);
 router.post("/profile/:userId", checkUserBlocked, updateUserProfile);
 
+// Profile aliases for Flutter
+router.get("/user/profile/:userId", checkUserBlocked, getUserProfile);
+router.post("/user/profile/:userId", checkUserBlocked, updateUserProfile);
+
 /* ------------------------------------------
    📅 BOOKING ROUTES (Customer Side)
    NOTE: Specific routes MUST come before parameterized routes
@@ -53,15 +57,19 @@ router.post("/booking/status-update", updateBookingStatus);
 
 // Create booking - MUST come before :bookingId route
 router.post("/booking/create", checkUserBlocked, createCustomerBooking);
+router.post("/user/booking/create", checkUserBlocked, createCustomerBooking); // Alias
 
 // Get all user bookings
 router.get("/bookings/:userId", checkUserBlocked, getUserBookings);
+router.get("/user/bookings/:userId", checkUserBlocked, getUserBookings); // Alias
 
 // Cancel booking
 router.post("/booking/:bookingId/cancel", checkUserBlocked, cancelBooking);
+router.post("/user/booking/:bookingId/cancel", checkUserBlocked, cancelBooking); // Alias
 
 // Get single booking details - MUST come last (catches any bookingId)
 router.get("/booking/:bookingId", getBookingDetails);
+router.get("/user/booking/:bookingId", getBookingDetails); // Alias
 
 /* ------------------------------------------
    🔒 ADMIN ROUTES - User Blocking
