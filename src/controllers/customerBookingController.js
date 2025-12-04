@@ -168,6 +168,62 @@ export const createCustomerBooking = async (req, res) => {
       // Continue booking process even if external notification fails
     }
 
+    // ✅ Step 3.6: Send to webserver-vendor external orders API
+    try {
+      console.log('\n🌐 ========================================');
+      console.log('🌐 SENDING TO WEBSERVER-VENDOR EXTERNAL API');
+      
+      // Build payload using bookings + users collections
+      const webserverPayload = {
+        customerId: String(customer._id), // Use MongoDB _id as customerId
+        customerName: customer.name || "Unknown Customer",
+        customerPhone: String(customer.phone),
+        customerAddress: customer.address || location.address || "",
+        workType: selectedService,
+        description: jobDescription,
+        location: {
+          latitude: customer.location?.coordinates?.[1] || location.latitude,
+          longitude: customer.location?.coordinates?.[0] || location.longitude
+        }
+      };
+
+      console.log('🌐 Webserver Payload:', JSON.stringify(webserverPayload, null, 2));
+
+      const webserverResponse = await axios.post(
+        'https://webserver-vendor.vercel.app/api/external/orders',
+        webserverPayload,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'x-customer-secret': '7c3a762645e64b89d513a2a2dde29605a9595d368826a762918fbb8e04412824'
+          },
+          timeout: 15000,
+          validateStatus: (status) => status >= 200 && status < 500
+        }
+      );
+
+      console.log('✅ ========================================');
+      console.log('✅ WEBSERVER-VENDOR RESPONSE');
+      console.log('✅ Status:', webserverResponse.status);
+      console.log('✅ Data:', JSON.stringify(webserverResponse.data, null, 2));
+      console.log('✅ ========================================');
+
+    } catch (webserverError) {
+      console.error('❌ ========================================');
+      console.error('❌ WEBSERVER-VENDOR API FAILED');
+      console.error('❌ Error:', webserverError.message);
+      
+      if (webserverError.response) {
+        console.error('❌ Response Status:', webserverError.response.status);
+        console.error('❌ Response Data:', JSON.stringify(webserverError.response.data, null, 2));
+      } else if (webserverError.request) {
+        console.error('❌ No response received');
+      }
+      
+      console.error('❌ ========================================');
+      // Continue booking process even if this fails
+    }
+
     // ✅ Step 4: Find best available vendor
     console.log('\n🔍 Searching for available vendor...');
     const vendorMatch = await findBestVendor(
