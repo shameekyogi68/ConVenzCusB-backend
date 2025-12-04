@@ -38,15 +38,17 @@ router.post("/user/register", registerUser); // Alias for Flutter app compatibil
 router.post("/verify-otp", checkUserBlocked, verifyOtp); // Check block status during login
 router.post("/user/verify-otp", checkUserBlocked, verifyOtp); // Alias for Flutter app compatibility
 router.post("/update-user", checkUserBlocked, updateUserDetails);
-router.post("/update-location", checkUserBlocked, updateVendorLocation);
-router.post("/update-fcm-token", checkUserBlocked, updateFcmToken);
+router.post("/update-location", updateVendorLocation); // No blocking - location must work
+router.post("/user/update-location", updateVendorLocation); // Alias
+router.post("/update-fcm-token", updateFcmToken); // No blocking - FCM must work
+router.post("/user/update-fcm-token", updateFcmToken); // Alias
 
-router.get("/profile/:userId", checkUserBlocked, getUserProfile);
-router.post("/profile/:userId", checkUserBlocked, updateUserProfile);
+router.get("/profile/:userId", getUserProfile); // No blocking - view profile always allowed
+router.post("/profile/:userId", checkUserBlocked, updateUserProfile); // Block editing only
 
 // Profile aliases for Flutter
-router.get("/user/profile/:userId", checkUserBlocked, getUserProfile);
-router.post("/user/profile/:userId", checkUserBlocked, updateUserProfile);
+router.get("/user/profile/:userId", getUserProfile); // No blocking
+router.post("/user/profile/:userId", checkUserBlocked, updateUserProfile); // Block editing only
 
 /* ------------------------------------------
    📅 BOOKING ROUTES (Customer Side)

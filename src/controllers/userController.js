@@ -331,11 +331,18 @@ export const updateVendorLocation = async (req, res) => {
 
     return res.json({
       success: true,
-      message: "Location updated",
-      location: { latitude, longitude, address },
+      message: "Location updated successfully",
+      user: user, // Return full user object
+      location: { 
+        latitude, 
+        longitude, 
+        address,
+        coordinates: [longitude, latitude]
+      },
     });
   } catch (err) {
     console.error('❌ Update Location Error:', err.message);
+    console.error('❌ Stack:', err.stack);
     return res.json({ success: false, message: err.message });
   }
 };
