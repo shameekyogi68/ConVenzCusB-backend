@@ -8,45 +8,75 @@ const AutoIncrement = AutoIncrementFactory(mongoose);
 ------------------------------------------- */
 const bookingSchema = new mongoose.Schema(
   {
-    // Assuming userId refers to the custom 'user_id' (Number) from your User model
+    // Customer who created the booking
     userId: {
-      type: Number,
-      required: true,
-      ref: "User" // Optional: Logic ref for population if using custom ID
-    },
-
-    // Assuming vendorId is also a user (vendor) with a custom Number ID
-    vendorId: {
       type: Number,
       required: true,
       ref: "User"
     },
 
-    // Assuming servicesId refers to a Service model (Number ID)
-    servicesId: {
+    // Vendor assigned to the booking
+    vendorId: {
       type: Number,
-      required: true,
+      default: null,
+      ref: "Vendor"
     },
 
-    price: {
-      type: Number,
-      required: true,
-    },
-
-    bookingStatus: {
+    // Service requested
+    selectedService: {
       type: String,
-      enum: ["pending", "accepted", "completed", "cancelled"],
+      required: true,
+    },
+
+    // Job description/details
+    jobDescription: {
+      type: String,
+      required: true,
+    },
+
+    // Scheduled date
+    date: {
+      type: String,
+      required: true,
+    },
+
+    // Scheduled time
+    time: {
+      type: String,
+      required: true,
+    },
+
+    // Booking location
+    location: {
+      type: { type: String, default: "Point" },
+      coordinates: { type: [Number], required: true }, // [longitude, latitude]
+      address: { type: String, required: true },
+    },
+
+    // Booking status
+    status: {
+      type: String,
+      enum: ["pending", "accepted", "rejected", "completed", "cancelled"],
       default: "pending",
     },
-  },
-  {
-    collection: "Booking",
-    timestamps: {
-      createdAt: "booking_createdAt",
-      updatedAt: "booking_modifiedAt",
+
+    // OTP for verification (null until vendor accepts)
+    otpStart: {
+      type: Number,
+      default: null,
     },
-  }
+
+    // Distance from vendor to customer (in km)
+    distance: {
+      type: Number,
+      default: null,
+    },
+  },
+  { timestamps: true }
 );
+
+// Enable geospatial queries on booking location
+bookingSchema.index({ location: "2dsphere" });
 
 // Auto-increment booking_id
 bookingSchema.plugin(AutoIncrement, {
