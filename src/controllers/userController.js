@@ -212,10 +212,20 @@ export const getUserProfile = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    console.log('✅ Profile retrieved successfully for:', user.name || user.phone);
+    console.log('✅ Profile retrieved successfully');
+    console.log('   Name:', user.name || 'Not set');
+    console.log('   Phone:', user.phone);
+    console.log('   Address:', user.address || 'Not set');
+    console.log('   Location:', user.location?.coordinates || 'Not set');
+    console.log('   isBlocked:', user.isBlocked);
     console.log('='.repeat(50));
 
-    return res.status(200).json({ success: true, data: user });
+    // Return user data with all fields
+    return res.status(200).json({ 
+      success: true, 
+      user: user,
+      data: user // Include both for compatibility
+    });
   } catch (err) {
     console.error('❌ Get Profile Error:', err.message);
     return res.status(500).json({ success: false, message: err.message });
