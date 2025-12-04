@@ -56,7 +56,7 @@ const bookingSchema = new mongoose.Schema(
     // Booking status
     status: {
       type: String,
-      enum: ["pending", "accepted", "rejected", "completed", "cancelled"],
+      enum: ["pending", "accepted", "rejected", "enroute", "completed", "cancelled"],
       default: "pending",
     },
 
@@ -70,6 +70,17 @@ const bookingSchema = new mongoose.Schema(
     distance: {
       type: Number,
       default: null,
+    },
+
+    // External vendor details (from callback)
+    externalVendor: {
+      vendorId: String,
+      vendorName: String,
+      vendorPhone: String,
+      vendorAddress: String,
+      serviceType: String,
+      assignedAt: Date,
+      lastUpdated: Date,
     },
   },
   { timestamps: true }

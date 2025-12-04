@@ -6,6 +6,7 @@ import userRoutes from "./src/routes/userRoutes.js";
 import bookingRoutes from "./src/routes/bookingRoutes.js";
 import subscriptionRoutes from "./src/routes/subscriptionRoutes.js";
 import notificationRoutes from "./src/routes/notificationRoutes.js";
+import externalRoutes from "./src/routes/externalRoutes.js";
 
 // Load environment variables
 dotenv.config();
@@ -55,6 +56,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/booking", bookingRoutes);
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/notification", notificationRoutes);
+app.use("/api/external", externalRoutes); // External vendor callbacks
 
 // Health Check Route
 app.get("/", (req, res) => {
