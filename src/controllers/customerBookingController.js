@@ -90,43 +90,82 @@ export const createCustomerBooking = async (req, res) => {
 
     console.log(`✅ BOOKING_CREATED | ${new Date().toISOString()} | Booking ID: ${newBooking.booking_id} | Status: pending`);
 
-    // ✅ Step 3.5: Notify friend's vendor server
+    // ✅ Step 3.5: Notify friend's vendor server - CRITICAL
+    const externalVendorUrl = 'https://convenz-vendor-dor.vercel.app/api/external/orders';
+    
+    const externalOrderPayload = {
+      orderId: newBooking.booking_id,
+      bookingId: newBooking.booking_id,
+      customerId: userId,
+      customerName: customer.name || "Customer",
+      customerPhone: String(customer.phone),
+      service: selectedService,
+      serviceType: selectedService,
+      description: jobDescription,
+      jobDescription: jobDescription,
+      date: date,
+      time: time,
+      location: {
+        latitude: Number(location.latitude),
+        longitude: Number(location.longitude),
+        address: location.address
+      },
+      customerLocation: {
+        latitude: Number(location.latitude),
+        longitude: Number(location.longitude),
+        address: location.address
+      },
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      timestamp: new Date().toISOString()
+    };
+
+    console.log('\n📤 ========================================');
+    console.log('📤 SENDING TO EXTERNAL VENDOR SERVER');
+    console.log('📤 URL:', externalVendorUrl);
+    console.log('📤 Payload:', JSON.stringify(externalOrderPayload, null, 2));
+    console.log('📤 ========================================');
+
     try {
-      console.log('\n📤 Notifying external vendor server...');
-      const externalVendorUrl = 'https://convenz-vendor-dor.vercel.app/api/external/orders';
-      
-      const externalPayload = {
-        bookingId: newBooking.booking_id,
-        userId: userId,
-        customerName: customer.name || "Customer",
-        customerPhone: String(customer.phone),
-        selectedService: selectedService,
-        jobDescription: jobDescription,
-        date: date,
-        time: time,
-        location: {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          address: location.address
-        },
-        status: "pending",
-        createdAt: new Date().toISOString()
-      };
-
-      console.log('📦 External Vendor Payload:', JSON.stringify(externalPayload, null, 2));
-
-      const externalResponse = await axios.post(externalVendorUrl, externalPayload, {
+      const externalResponse = await axios.post(externalVendorUrl, externalOrderPayload, {
         headers: {
           'Content-Type': 'application/json',
-          'X-Source': 'customer-backend'
+          'Accept': 'application/json',
+          'X-Source': 'customer-backend',
+          'X-API-Key': 'customer-backend-key'
         },
-        timeout: 10000
+        timeout: 15000,
+        validateStatus: function (status) {
+          return status >= 200 && status < 500; // Accept any response to see what happens
+        }
       });
 
-      console.log(`✅ EXTERNAL_VENDOR_NOTIFIED | Status: ${externalResponse.status}`);
+      console.log('✅ ========================================');
+      console.log('✅ EXTERNAL VENDOR SERVER RESPONSE');
+      console.log('✅ Status:', externalResponse.status);
+      console.log('✅ Data:', JSON.stringify(externalResponse.data, null, 2));
+      console.log('✅ ========================================');
+      
     } catch (externalError) {
-      console.error(`⚠️  EXTERNAL_VENDOR_NOTIFICATION_FAILED | Error: ${externalError.message}`);
-      // Continue even if this fails
+      console.error('❌ ========================================');
+      console.error('❌ EXTERNAL VENDOR NOTIFICATION FAILED');
+      console.error('❌ Error:', externalError.message);
+      
+      if (externalError.response) {
+        console.error('❌ Response Status:', externalError.response.status);
+        console.error('❌ Response Headers:', JSON.stringify(externalError.response.headers, null, 2));
+        console.error('❌ Response Data:', JSON.stringify(externalError.response.data, null, 2));
+      } else if (externalError.request) {
+        console.error('❌ No response received from external vendor server');
+        console.error('❌ Request details:', externalError.request);
+      } else {
+        console.error('❌ Error setting up request:', externalError.message);
+      }
+      
+      console.error('❌ Full error stack:', externalError.stack);
+      console.error('❌ ========================================');
+      
+      // Continue booking process even if external notification fails
     }
 
     // ✅ Step 4: Find best available vendor
