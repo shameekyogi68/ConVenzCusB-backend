@@ -1,0 +1,366 @@
+import axios from "axios";
+import Booking from "../models/bookingModel.js";
+import User from "../models/userModel.js";
+import { findBestVendor } from "../utils/vendorMatcherFixed.js";
+import { sendNotification } from "../utils/sendNotification.js";
+
+/* ------------------------------------------------------------
+   📝 CREATE BOOKING & NOTIFY VENDOR BACKEND
+   
+   Flow:
+   1. Validate customer and create booking
+   2. Find best available vendor
+   3. Send POST request to vendor backend
+   4. Return success response to customer
+------------------------------------------------------------ */
+export const createCustomerBooking = async (req, res) => {
+  try {
+    console.log('\n📅 === CUSTOMER BOOKING REQUEST ===');
+    console.log('📦 Request Body:', JSON.stringify(req.body, null, 2));
+    
+    const { userId, selectedService, jobDescription, date, time, location } = req.body;
+
+    // ✅ Step 1: Validate required fields
+    if (!userId || !selectedService || !jobDescription || !date || !time || !location) {
+      console.log('❌ Missing required fields');
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: userId, selectedService, jobDescription, date, time, location"
+      });
+    }
+
+    if (!location.latitude || !location.longitude || !location.address) {
+      console.log('❌ Invalid location data');
+      return res.status(400).json({
+        success: false,
+        message: "Location must include latitude, longitude, and address"
+      });
+    }
+
+    // ✅ Step 2: Verify customer exists
+    const customer = await User.findOne({ user_id: userId });
+    if (!customer) {
+      console.log(`❌ Customer ${userId} not found`);
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found"
+      });
+    }
+
+    console.log(`✅ Customer: ${customer.name || customer.phone} (ID: ${userId})`);
+
+    // ✅ Step 3: Create booking with pending status
+    const newBooking = await Booking.create({
+      userId,
+      selectedService,
+      jobDescription,
+      date,
+      time,
+      location: {
+        type: "Point",
+        coordinates: [location.longitude, location.latitude],
+        address: location.address
+      },
+      status: "pending",
+      otpStart: null,
+      vendorId: null,
+      distance: null
+    });
+
+    console.log(`✅ BOOKING_CREATED | ${new Date().toISOString()} | Booking ID: ${newBooking.booking_id} | Status: pending`);
+
+    // ✅ Step 4: Find best available vendor
+    console.log('\n🔍 Searching for available vendor...');
+    const vendorMatch = await findBestVendor(
+      selectedService,
+      location.latitude,
+      location.longitude,
+      50 // 50km radius
+    );
+
+    if (!vendorMatch) {
+      console.log('⚠️  NO_VENDOR_AVAILABLE | Booking created but no vendor found');
+      
+      // Notify customer
+      if (customer.fcmToken) {
+        try {
+          await sendNotification(
+            customer.fcmToken,
+            "⚠️ No Vendor Available",
+            `Sorry, no vendor is available for ${selectedService} right now. We'll notify you when one becomes available.`,
+            { 
+              type: "BOOKING_STATUS",
+              bookingId: String(newBooking.booking_id),
+              status: "pending"
+            }
+          );
+        } catch (error) {
+          console.log(`⚠️  Failed to send notification: ${error.message}`);
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Booking created but no vendor available at the moment",
+        data: {
+          bookingId: newBooking.booking_id,
+          status: newBooking.status,
+          service: selectedService,
+          date,
+          time
+        },
+        vendorFound: false
+      });
+    }
+
+    // ✅ Step 5: Update booking with vendor details
+    newBooking.vendorId = vendorMatch.vendor.vendor_id;
+    newBooking.distance = vendorMatch.distance;
+    await newBooking.save();
+
+    console.log(`✅ VENDOR_MATCHED | Vendor: ${vendorMatch.vendor.name} (ID: ${vendorMatch.vendor.vendor_id}) | Distance: ${vendorMatch.distance}km`);
+
+    // ✅ Step 6: Send POST request to vendor backend (SERVER-TO-SERVER)
+    const vendorBackendUrl = process.env.VENDOR_BACKEND_URL;
+    
+    if (!vendorBackendUrl) {
+      console.log('⚠️  VENDOR_BACKEND_URL not configured in environment');
+    } else {
+      try {
+        console.log(`\n📤 Sending request to vendor backend: ${vendorBackendUrl}/vendor/api/new-booking`);
+        
+        const vendorNotificationPayload = {
+          bookingId: newBooking.booking_id,
+          vendorId: vendorMatch.vendor.vendor_id,
+          customerId: userId,
+          customerName: customer.name || "Customer",
+          customerPhone: customer.phone,
+          service: selectedService,
+          jobDescription,
+          date,
+          time,
+          location: {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            address: location.address
+          },
+          distance: vendorMatch.distance,
+          createdAt: new Date().toISOString()
+        };
+
+        const vendorBackendResponse = await axios.post(
+          `${vendorBackendUrl}/vendor/api/new-booking`,
+          vendorNotificationPayload,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-Source': 'customer-backend'
+            },
+            timeout: 10000 // 10 second timeout
+          }
+        );
+
+        console.log(`✅ VENDOR_BACKEND_NOTIFIED | Status: ${vendorBackendResponse.status} | Response:`, vendorBackendResponse.data);
+        
+      } catch (vendorError) {
+        console.log(`⚠️  VENDOR_BACKEND_NOTIFICATION_FAILED | Error: ${vendorError.message}`);
+        
+        // Log but don't fail the booking - vendor can still be notified via FCM
+        if (vendorError.response) {
+          console.log(`   Response Status: ${vendorError.response.status}`);
+          console.log(`   Response Data:`, vendorError.response.data);
+        }
+      }
+    }
+
+    // ✅ Step 7: Send FCM notification to vendor (backup notification)
+    if (vendorMatch.vendor.fcmTokens && vendorMatch.vendor.fcmTokens.length > 0) {
+      try {
+        await sendNotification(
+          vendorMatch.vendor.fcmTokens[0],
+          "🔔 New Service Request",
+          `${customer.name || 'A customer'} needs ${selectedService} at ${time} on ${date}`,
+          {
+            type: "NEW_BOOKING",
+            bookingId: String(newBooking.booking_id),
+            vendorId: String(vendorMatch.vendor.vendor_id),
+            service: selectedService
+          }
+        );
+        console.log(`📲 VENDOR_FCM_SENT | Vendor: ${vendorMatch.vendor.vendor_id}`);
+      } catch (error) {
+        console.log(`⚠️  VENDOR_FCM_FAILED | Error: ${error.message}`);
+      }
+    }
+
+    // ✅ Step 8: Send confirmation to customer
+    if (customer.fcmToken) {
+      try {
+        await sendNotification(
+          customer.fcmToken,
+          "✅ Booking Confirmed",
+          `Your ${selectedService} request for ${date} at ${time} has been sent to a vendor. Waiting for acceptance.`,
+          {
+            type: "BOOKING_CONFIRMATION",
+            bookingId: String(newBooking.booking_id),
+            service: selectedService,
+            vendorName: vendorMatch.vendor.name
+          }
+        );
+        console.log(`📲 CUSTOMER_NOTIFIED | User: ${userId}`);
+      } catch (error) {
+        console.log(`⚠️  CUSTOMER_NOTIFICATION_FAILED | Error: ${error.message}`);
+      }
+    }
+
+    console.log('='.repeat(50));
+    console.log('✅ BOOKING PROCESS COMPLETED SUCCESSFULLY\n');
+
+    // ✅ Step 9: Return success response
+    return res.status(201).json({
+      success: true,
+      message: "Booking created and vendor notified",
+      data: {
+        bookingId: newBooking.booking_id,
+        status: newBooking.status,
+        service: selectedService,
+        date,
+        time,
+        location: location.address,
+        vendor: {
+          id: vendorMatch.vendor.vendor_id,
+          name: vendorMatch.vendor.name,
+          distance: `${vendorMatch.distance} km`
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ BOOKING_ERROR:', error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while creating booking",
+      error: error.message
+    });
+  }
+};
+
+/* ------------------------------------------------------------
+   📋 GET USER'S BOOKINGS
+------------------------------------------------------------ */
+export const getUserBookings = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log(`\n📋 Fetching bookings for user: ${userId}`);
+    
+    const bookings = await Booking.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(50);
+    
+    console.log(`✅ Found ${bookings.length} bookings`);
+    
+    return res.status(200).json({
+      success: true,
+      data: bookings,
+      count: bookings.length
+    });
+    
+  } catch (error) {
+    console.error('❌ GET_BOOKINGS_ERROR:', error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching bookings",
+      error: error.message
+    });
+  }
+};
+
+/* ------------------------------------------------------------
+   🔍 GET SINGLE BOOKING DETAILS
+------------------------------------------------------------ */
+export const getBookingDetails = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    
+    console.log(`\n🔍 Fetching booking: ${bookingId}`);
+    
+    const booking = await Booking.findOne({ booking_id: bookingId });
+    
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found"
+      });
+    }
+    
+    console.log(`✅ Booking found: ${booking.selectedService} - ${booking.status}`);
+    
+    return res.status(200).json({
+      success: true,
+      data: booking
+    });
+    
+  } catch (error) {
+    console.error('❌ GET_BOOKING_ERROR:', error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching booking",
+      error: error.message
+    });
+  }
+};
+
+/* ------------------------------------------------------------
+   ❌ CANCEL BOOKING
+------------------------------------------------------------ */
+export const cancelBooking = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const { userId } = req.body;
+    
+    console.log(`\n❌ Cancel booking request: ${bookingId} by user: ${userId}`);
+    
+    const booking = await Booking.findOne({ booking_id: bookingId });
+    
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found"
+      });
+    }
+    
+    if (booking.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized to cancel this booking"
+      });
+    }
+    
+    if (booking.status === "completed" || booking.status === "cancelled") {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot cancel booking with status: ${booking.status}`
+      });
+    }
+    
+    booking.status = "cancelled";
+    await booking.save();
+    
+    console.log(`✅ Booking ${bookingId} cancelled successfully`);
+    
+    return res.status(200).json({
+      success: true,
+      message: "Booking cancelled successfully",
+      data: booking
+    });
+    
+  } catch (error) {
+    console.error('❌ CANCEL_BOOKING_ERROR:', error);
+    return res.status(500).json({
+      success: false,
+      message: "Error cancelling booking",
+      error: error.message
+    });
+  }
+};
