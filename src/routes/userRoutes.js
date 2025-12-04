@@ -19,6 +19,12 @@ import {
   cancelBooking,
   updateBookingStatus
 } from "../controllers/customerBookingController.js";
+import {
+  checkUserBlocked,
+  blockUser,
+  unblockUser,
+  checkBlockStatus
+} from "../middlewares/checkBlocked.js";
 
 const router = express.Router();
 
@@ -27,23 +33,30 @@ const router = express.Router();
 ------------------------------------------- */
 router.post("/register", registerUser);
 router.post("/verify-otp", verifyOtp);
-router.post("/update-user", updateUserDetails);
-router.post("/update-location", updateVendorLocation);
-router.post("/update-fcm-token", updateFcmToken);
+router.post("/update-user", checkUserBlocked, updateUserDetails);
+router.post("/update-location", checkUserBlocked, updateVendorLocation);
+router.post("/update-fcm-token", checkUserBlocked, updateFcmToken);
 
-router.get("/profile/:userId", getUserProfile);
-router.post("/profile/:userId", updateUserProfile);
+router.get("/profile/:userId", checkUserBlocked, getUserProfile);
+router.post("/profile/:userId", checkUserBlocked, updateUserProfile);
 
 /* ------------------------------------------
    📅 BOOKING ROUTES (Customer Side)
 ------------------------------------------- */
-router.post("/booking/create", createCustomerBooking);
-router.get("/bookings/:userId", getUserBookings);
+router.post("/booking/create", checkUserBlocked, createCustomerBooking);
+router.get("/bookings/:userId", checkUserBlocked, getUserBookings);
 router.get("/booking/:bookingId", getBookingDetails);
-router.post("/booking/:bookingId/cancel", cancelBooking);
+router.post("/booking/:bookingId/cancel", checkUserBlocked, cancelBooking);
 
-// Status update from vendor backend
+// Status update from vendor backend (no blocking check - comes from vendor)
 router.post("/booking/status-update", updateBookingStatus);
+
+/* ------------------------------------------
+   🔒 ADMIN ROUTES - User Blocking
+------------------------------------------- */
+router.post("/admin/block-user", blockUser);
+router.post("/admin/unblock-user", unblockUser);
+router.get("/admin/check-status/:userId", checkBlockStatus);
 
 /* ------------------------------------------
    💳 SUBSCRIPTION ROUTES

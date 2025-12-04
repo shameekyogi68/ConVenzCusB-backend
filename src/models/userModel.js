@@ -42,6 +42,24 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+
+    // 🚫 Block Status (Admin Control)
+    isBlocked: {
+      type: Boolean,
+      default: false,
+    },
+
+    // 📝 Block Reason (Optional)
+    blockReason: {
+      type: String,
+      default: null,
+    },
+
+    // 📅 Blocked At (Timestamp)
+    blockedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
