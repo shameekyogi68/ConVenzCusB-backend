@@ -117,7 +117,7 @@ export const receiveVendorUpdate = async (req, res) => {
         
         switch (status.toLowerCase()) {
           case 'accepted':
-            notificationTitle = '✅ Vendor Assigned!';
+            notificationTitle = '✅ Vendor Found!';
             notificationBody = `${vendorName} has accepted your ${booking.selectedService} request.`;
             break;
           case 'rejected':
@@ -141,17 +141,27 @@ export const receiveVendorUpdate = async (req, res) => {
             notificationBody = `Your booking status has been updated to: ${status}`;
         }
 
+        // Build notification data with vendor details
+        const notificationData = {
+          type: status.toLowerCase() === 'accepted' ? 'VENDOR_FOUND' : 'VENDOR_UPDATE',
+          bookingId: String(booking.booking_id),
+          status: booking.status,
+          vendorId: String(vendorId),
+          vendorName: vendorName,
+          vendorPhone: vendorPhone,
+          vendorAddress: vendorAddress,
+          serviceType: serviceType,
+          // Include booking details for Flutter navigation
+          service: booking.selectedService,
+          date: booking.date,
+          time: booking.time
+        };
+
         await sendNotification(
           customer.fcmToken,
           notificationTitle,
           notificationBody,
-          {
-            type: 'VENDOR_UPDATE',
-            bookingId: String(booking.booking_id),
-            status: booking.status,
-            vendorName: vendorName,
-            vendorPhone: vendorPhone
-          }
+          notificationData
         );
 
         console.log(`📲 CUSTOMER_NOTIFIED | User ID: ${customer.user_id} | Status: ${status}`);
