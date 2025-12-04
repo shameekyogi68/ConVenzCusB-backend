@@ -90,6 +90,45 @@ export const createCustomerBooking = async (req, res) => {
 
     console.log(`✅ BOOKING_CREATED | ${new Date().toISOString()} | Booking ID: ${newBooking.booking_id} | Status: pending`);
 
+    // ✅ Step 3.5: Notify friend's vendor server
+    try {
+      console.log('\n📤 Notifying external vendor server...');
+      const externalVendorUrl = 'https://convenz-vendor-dor.vercel.app/api/external/orders';
+      
+      const externalPayload = {
+        bookingId: newBooking.booking_id,
+        userId: userId,
+        customerName: customer.name || "Customer",
+        customerPhone: String(customer.phone),
+        selectedService: selectedService,
+        jobDescription: jobDescription,
+        date: date,
+        time: time,
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          address: location.address
+        },
+        status: "pending",
+        createdAt: new Date().toISOString()
+      };
+
+      console.log('📦 External Vendor Payload:', JSON.stringify(externalPayload, null, 2));
+
+      const externalResponse = await axios.post(externalVendorUrl, externalPayload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Source': 'customer-backend'
+        },
+        timeout: 10000
+      });
+
+      console.log(`✅ EXTERNAL_VENDOR_NOTIFIED | Status: ${externalResponse.status}`);
+    } catch (externalError) {
+      console.error(`⚠️  EXTERNAL_VENDOR_NOTIFICATION_FAILED | Error: ${externalError.message}`);
+      // Continue even if this fails
+    }
+
     // ✅ Step 4: Find best available vendor
     console.log('\n🔍 Searching for available vendor...');
     const vendorMatch = await findBestVendor(
