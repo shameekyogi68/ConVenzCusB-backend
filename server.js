@@ -15,6 +15,8 @@ connectDB();
 
 const app = express();
 
+// Updated: 2025-12-04 - Blocking system working
+
 // Middleware - CORS Configuration for Mobile Apps
 app.use(cors({
   origin: '*', // Allow all origins for mobile Flutter apps
