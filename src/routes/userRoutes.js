@@ -16,7 +16,8 @@ import {
   createCustomerBooking,
   getUserBookings,
   getBookingDetails,
-  cancelBooking
+  cancelBooking,
+  updateBookingStatus
 } from "../controllers/customerBookingController.js";
 
 const router = express.Router();
@@ -40,6 +41,9 @@ router.post("/booking/create", createCustomerBooking);
 router.get("/bookings/:userId", getUserBookings);
 router.get("/booking/:bookingId", getBookingDetails);
 router.post("/booking/:bookingId/cancel", cancelBooking);
+
+// Status update from vendor backend
+router.post("/booking/status-update", updateBookingStatus);
 
 /* ------------------------------------------
    💳 SUBSCRIPTION ROUTES

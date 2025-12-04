@@ -364,3 +364,144 @@ export const cancelBooking = async (req, res) => {
     });
   }
 };
+
+/* ------------------------------------------------------------
+   🔄 BOOKING STATUS UPDATE (FROM VENDOR BACKEND)
+   
+   This endpoint receives status updates from vendor backend
+   when vendor accepts/rejects/completes a booking
+------------------------------------------------------------ */
+export const updateBookingStatus = async (req, res) => {
+  try {
+    console.log('\n🔄 === BOOKING STATUS UPDATE FROM VENDOR ===');
+    console.log('📦 Request Body:', JSON.stringify(req.body, null, 2));
+    
+    const { bookingId, status, vendorId, otpStart, rejectionReason } = req.body;
+
+    // Validate required fields
+    if (!bookingId || !status) {
+      console.log('❌ Missing required fields');
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: bookingId, status"
+      });
+    }
+
+    // Validate status
+    const validStatuses = ["accepted", "rejected", "completed", "cancelled"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Must be one of: ${validStatuses.join(", ")}`
+      });
+    }
+
+    // Find booking
+    const booking = await Booking.findOne({ booking_id: bookingId });
+    
+    if (!booking) {
+      console.log(`❌ Booking ${bookingId} not found`);
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found"
+      });
+    }
+
+    console.log(`📋 Current booking status: ${booking.status} → New status: ${status}`);
+
+    // Update booking status
+    booking.status = status;
+    
+    // Update OTP if vendor accepted
+    if (status === "accepted" && otpStart) {
+      booking.otpStart = otpStart;
+      console.log(`🔐 OTP assigned: ${otpStart}`);
+    }
+
+    // Update vendor ID if provided
+    if (vendorId) {
+      booking.vendorId = vendorId;
+    }
+
+    await booking.save();
+
+    console.log(`✅ Booking ${bookingId} updated to: ${status}`);
+
+    // Get customer details for notification
+    const customer = await User.findOne({ user_id: booking.userId });
+    
+    if (!customer) {
+      console.log(`⚠️  Customer ${booking.userId} not found for notification`);
+    }
+
+    // Send notification to customer based on status
+    if (customer && customer.fcmToken) {
+      try {
+        let notificationTitle = "";
+        let notificationBody = "";
+        let notificationData = {
+          type: "BOOKING_STATUS_UPDATE",
+          bookingId: String(bookingId),
+          status: status
+        };
+
+        switch (status) {
+          case "accepted":
+            notificationTitle = "✅ Booking Accepted!";
+            notificationBody = `Your ${booking.selectedService} booking has been accepted. OTP: ${otpStart || 'N/A'}`;
+            notificationData.otp = String(otpStart || '');
+            break;
+            
+          case "rejected":
+            notificationTitle = "❌ Booking Rejected";
+            notificationBody = rejectionReason || `Sorry, your ${booking.selectedService} booking was rejected. We'll find another vendor.`;
+            notificationData.reason = rejectionReason || '';
+            break;
+            
+          case "completed":
+            notificationTitle = "🎉 Service Completed";
+            notificationBody = `Your ${booking.selectedService} service has been completed. Thank you!`;
+            break;
+            
+          case "cancelled":
+            notificationTitle = "⚠️ Booking Cancelled";
+            notificationBody = `Your ${booking.selectedService} booking has been cancelled.`;
+            break;
+        }
+
+        await sendNotification(
+          customer.fcmToken,
+          notificationTitle,
+          notificationBody,
+          notificationData
+        );
+        
+        console.log(`📲 CUSTOMER_NOTIFIED | User: ${customer.user_id} | Status: ${status}`);
+        
+      } catch (error) {
+        console.log(`⚠️  NOTIFICATION_FAILED | Error: ${error.message}`);
+      }
+    }
+
+    console.log('='.repeat(50));
+
+    return res.status(200).json({
+      success: true,
+      message: "Booking status updated successfully",
+      data: {
+        bookingId: booking.booking_id,
+        status: booking.status,
+        otpStart: booking.otpStart,
+        vendorId: booking.vendorId
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ UPDATE_BOOKING_STATUS_ERROR:', error);
+    return res.status(500).json({
+      success: false,
+      message: "Error updating booking status",
+      error: error.message
+    });
+  }
+};
