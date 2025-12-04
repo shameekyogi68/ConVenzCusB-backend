@@ -1,8 +1,32 @@
 import Booking from "../models/bookingModel.js";
 import User from "../models/userModel.js";
 import Vendor from "../models/vendorModel.js";
-import { findBestVendor } from "../utils/vendorMatcher.js";
+import { findBestVendor } from "../utils/vendorMatcherFixed.js";
 import { sendNotification, sendMultipleNotifications } from "../utils/sendNotification.js";
+import mongoose from "mongoose";
+
+/* Helper function to get vendor details from existing schema */
+const getVendorDetails = async (vendorId) => {
+  if (!vendorId) return null;
+  
+  const vendorsCollection = mongoose.connection.db.collection('vendors');
+  const vendor = await vendorsCollection.findOne({
+    $or: [
+      { vendorId: vendorId },
+      { _id: typeof vendorId === 'string' ? new mongoose.Types.ObjectId(vendorId) : vendorId }
+    ]
+  });
+  
+  if (!vendor) return null;
+  
+  return {
+    id: vendor.vendorId || vendor._id.toString(),
+    name: vendor.vendorName || vendor.businessName,
+    phone: vendor.mobile,
+    rating: vendor.rating || 0,
+    fcmTokens: vendor.fcmTokens || []
+  };
+};
 
 /* ------------------------------------------------------------
    📝 CREATE NEW BOOKING WITH VENDOR MATCHING
@@ -198,19 +222,7 @@ export const getUserBookings = async (req, res) => {
     // Enrich with vendor details
     const enrichedBookings = await Promise.all(
       bookings.map(async (booking) => {
-        let vendorDetails = null;
-        if (booking.vendorId) {
-          const vendor = await Vendor.findOne({ vendor_id: booking.vendorId });
-          if (vendor) {
-            vendorDetails = {
-              id: vendor.vendor_id,
-              name: vendor.name,
-              phone: vendor.phone,
-              rating: vendor.rating
-            };
-          }
-        }
-        
+        const vendorDetails = await getVendorDetails(booking.vendorId);
         return {
           ...booking.toObject(),
           vendor: vendorDetails
@@ -297,7 +309,7 @@ export const updateBookingStatus = async (req, res) => {
     }
 
     // Get vendor info
-    const vendor = await Vendor.findOne({ vendor_id: booking.vendorId });
+    const vendor = await getVendorDetails(booking.vendorId);
 
     // Handle status-specific logic
     if (status === "accepted") {
@@ -388,10 +400,17 @@ export const updateBookingStatus = async (req, res) => {
 
       // Update vendor stats
       if (vendor) {
-        vendor.totalBookings = (vendor.totalBookings || 0) + 1;
-        vendor.completedBookings = (vendor.completedBookings || 0) + 1;
-        await vendor.save();
-        console.log(`📊 VENDOR_STATS_UPDATED | Vendor: ${vendor.vendor_id} | Total: ${vendor.totalBookings} | Completed: ${vendor.completedBookings}`);
+        const vendorsCollection = mongoose.connection.db.collection('vendors');
+        await vendorsCollection.updateOne(
+          { $or: [{ vendorId: vendor.id }, { _id: new mongoose.Types.ObjectId(vendor.id) }] },
+          { 
+            $inc: { 
+              totalBookings: 1,
+              completedBookings: 1
+            }
+          }
+        );
+        console.log(`📊 VENDOR_STATS_UPDATED | Vendor: ${vendor.id} | Stats incremented`);
       }
 
       // Notify customer of completion
@@ -442,7 +461,7 @@ export const getBookingsByVendor = async (req, res) => {
     const { vendorId } = req.params;
     console.log(`🔍 Fetching bookings for vendor: ${vendorId}`);
 
-    const bookings = await Booking.find({ vendorId: Number(vendorId) })
+    const bookings = await Booking.find({ vendorId: vendorId })
       .sort({ createdAt: -1 });
 
     // Enrich with customer details
@@ -501,18 +520,7 @@ export const getBookingHistory = async (req, res) => {
     // Enrich with vendor details
     const enrichedBookings = await Promise.all(
       bookings.map(async (booking) => {
-        let vendorDetails = null;
-        if (booking.vendorId) {
-          const vendor = await Vendor.findOne({ vendor_id: booking.vendorId });
-          if (vendor) {
-            vendorDetails = {
-              id: vendor.vendor_id,
-              name: vendor.name,
-              rating: vendor.rating
-            };
-          }
-        }
-        
+        const vendorDetails = await getVendorDetails(booking.vendorId);
         return {
           ...booking.toObject(),
           vendor: vendorDetails
