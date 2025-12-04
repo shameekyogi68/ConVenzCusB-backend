@@ -12,6 +12,7 @@ import {
   updateUserProfile,
 } from "../controllers/userController.js";
 import { updateFcmToken } from "../controllers/notificationController.js";
+import Booking from "../models/bookingModel.js";
 
 const router = express.Router();
 
@@ -26,6 +27,41 @@ router.post("/update-fcm-token", updateFcmToken);
 
 router.get("/profile/:userId", getUserProfile);
 router.post("/profile/:userId", updateUserProfile);
+
+/* ------------------------------------------
+   📅 BOOKING ROUTES
+------------------------------------------- */
+// CREATE BOOKING
+router.post("/booking/create", async (req, res) => {
+  try {
+    console.log("📥 Booking Create Request:", req.body);
+
+    const { userId, selectedService, selectedDate, selectedTime, userLocation, jobDescription } = req.body;
+
+    if (!userId || !selectedService || !selectedDate || !selectedTime || !userLocation) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    const newBooking = await Booking.create({
+      userId,
+      selectedService,
+      selectedDate,
+      selectedTime,
+      userLocation,
+      jobDescription,
+      status: "pending",
+    });
+
+    return res.status(201).json({
+      message: "Booking created successfully",
+      booking: newBooking,
+    });
+
+  } catch (error) {
+    console.error("❌ Booking Create Error:", error);
+    return res.status(500).json({ message: "Server error", error });
+  }
+});
 
 /* ------------------------------------------
    💳 SUBSCRIPTION ROUTES
